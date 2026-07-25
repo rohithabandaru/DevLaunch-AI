@@ -1,4 +1,11 @@
-export type PortfolioTemplateId = "modern" | "minimal" | "bold";
+export type PortfolioTemplateId = "modern" | "minimal" | "bold" | "creative";
+
+export type PortfolioFontId =
+  | "inter"
+  | "space-grotesk"
+  | "dm-sans"
+  | "playfair"
+  | "jetbrains";
 
 export type SkillCategory =
   | "languages"
@@ -88,6 +95,8 @@ export type PortfolioData = {
   template: PortfolioTemplateId;
   themeMode: PortfolioThemeMode;
   accentColor: string;
+  fontFamily: PortfolioFontId;
+  animationsEnabled: boolean;
   published: boolean;
 
   // Hero
@@ -123,7 +132,7 @@ export type PortfolioData = {
   showServices: boolean;
   showBlog: boolean;
 
-  // Contact
+  // Contact & social
   email: string;
   phone: string;
   location: string;
@@ -131,6 +140,9 @@ export type PortfolioData = {
   github: string;
   portfolioUrl: string;
   twitter: string;
+  dribbble: string;
+  youtube: string;
+  medium: string;
 
   // Footer
   footerTagline: string;
@@ -155,4 +167,5 @@ export type PortfolioEditorSection =
 export type PortfolioAiAction =
   | "about"
   | "project"
-  | "skills_summary";
+  | "skills_summary"
+  | "full_portfolio";

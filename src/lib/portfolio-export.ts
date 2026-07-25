@@ -1,4 +1,11 @@
-import { getSeoDescription, getSeoTitle, SKILL_CATEGORIES } from "@/lib/portfolio";
+import {
+  getFontGoogleUrl,
+  getFontStack,
+  getSeoDescription,
+  getSeoTitle,
+  SKILL_CATEGORIES,
+} from "@/lib/portfolio";
+import { createZip, downloadBlob } from "@/lib/zip";
 import type { PortfolioData } from "@/types/portfolio";
 
 function escapeHtml(value: string): string {
@@ -13,6 +20,25 @@ function sectionTitle(text: string): string {
   return `<h2 class="section-title">${escapeHtml(text)}</h2>`;
 }
 
+function socialLinksHtml(data: PortfolioData): string {
+  const links: { href: string; label: string }[] = [];
+  if (data.linkedin) links.push({ href: data.linkedin, label: "LinkedIn" });
+  if (data.github) links.push({ href: data.github, label: "GitHub" });
+  if (data.twitter) links.push({ href: data.twitter, label: "Twitter / X" });
+  if (data.dribbble) links.push({ href: data.dribbble, label: "Dribbble" });
+  if (data.youtube) links.push({ href: data.youtube, label: "YouTube" });
+  if (data.medium) links.push({ href: data.medium, label: "Medium" });
+  if (data.portfolioUrl)
+    links.push({ href: data.portfolioUrl, label: "Website" });
+  if (!links.length) return "";
+  return `<div class="socials">${links
+    .map(
+      (l) =>
+        `<a href="${escapeHtml(l.href)}" target="_blank" rel="noreferrer">${escapeHtml(l.label)}</a>`
+    )
+    .join(" · ")}</div>`;
+}
+
 /** Generate a self-contained static HTML portfolio for download/deploy. */
 export function buildStaticPortfolioHtml(data: PortfolioData): string {
   const title = escapeHtml(getSeoTitle(data));
@@ -24,6 +50,9 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
   const muted = isDark ? "#94a3b8" : "#64748b";
   const card = isDark ? "#111827" : "#f8fafc";
   const border = isDark ? "#1f2937" : "#e2e8f0";
+  const fontStack = getFontStack(data.fontFamily);
+  const fontUrl = getFontGoogleUrl(data.fontFamily);
+  const anim = data.animationsEnabled !== false;
 
   const skillsByCat = SKILL_CATEGORIES.map((cat) => {
     const items = data.skills.filter(
@@ -51,7 +80,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     .filter((p) => p.name.trim() || p.description.trim())
     .map(
       (p) => `
-      <article class="card project">
+      <article class="card project${anim ? " reveal" : ""}">
         ${p.featured ? `<span class="badge">Featured</span>` : ""}
         <h3>${escapeHtml(p.name || "Project")}</h3>
         <p>${escapeHtml(p.description || "")}</p>
@@ -69,7 +98,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
       .filter((i) => i.title.trim() || i.organization.trim())
       .map(
         (i) => `
-        <div class="timeline-item">
+        <div class="timeline-item${anim ? " reveal" : ""}">
           <div class="timeline-dot"></div>
           <div>
             <h3>${escapeHtml(i.title || "Role")}</h3>
@@ -88,7 +117,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     .filter((c) => c.name.trim())
     .map(
       (c) =>
-        `<li><strong>${escapeHtml(c.name)}</strong> — ${escapeHtml(c.issuer)}${c.date ? ` (${escapeHtml(c.date)})` : ""}</li>`
+        `<li><strong>${escapeHtml(c.name)}</strong> — ${escapeHtml(c.issuer)}${c.date ? ` (${escapeHtml(c.date)})` : ""}${c.credentialUrl ? ` · <a href="${escapeHtml(c.credentialUrl)}" target="_blank" rel="noreferrer">Credential</a>` : ""}</li>`
     )
     .join("");
 
@@ -106,7 +135,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
           .filter((s) => s.title.trim())
           .map(
             (s) =>
-              `<article class="card"><h3>${escapeHtml(s.title)}</h3><p>${escapeHtml(s.description)}</p></article>`
+              `<article class="card${anim ? " reveal" : ""}"><h3>${escapeHtml(s.title)}</h3><p>${escapeHtml(s.description)}</p></article>`
           )
           .join("")}</div></section>`
       : "";
@@ -115,7 +144,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     .filter((t) => t.quote.trim())
     .map(
       (t) => `
-      <blockquote class="card">
+      <blockquote class="card${anim ? " reveal" : ""}">
         <p>“${escapeHtml(t.quote)}”</p>
         <footer>— ${escapeHtml(t.name)}${t.role ? `, ${escapeHtml(t.role)}` : ""}${t.company ? ` at ${escapeHtml(t.company)}` : ""}</footer>
       </blockquote>`
@@ -133,6 +162,14 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
           .join("")}</div></section>`
       : "";
 
+  const isBold = data.template === "bold" || data.template === "creative";
+  const heroClass =
+    data.template === "bold"
+      ? "hero hero-center"
+      : data.template === "creative"
+        ? "hero hero-creative"
+        : "hero";
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -144,26 +181,34 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
   <meta property="og:description" content="${description}" />
   <meta name="twitter:card" content="summary_large_image" />
   ${data.customDomain ? `<link rel="canonical" href="https://${escapeHtml(data.customDomain)}" />` : ""}
+  ${fontUrl ? `<link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="${fontUrl}" rel="stylesheet" />` : ""}
   <style>
     :root { --accent: ${accent}; --bg: ${bg}; --fg: ${fg}; --muted: ${muted}; --card: ${card}; --border: ${border}; }
     * { box-sizing: border-box; }
-    body { margin: 0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--fg); line-height: 1.6; }
+    html { scroll-behavior: smooth; }
+    body { margin: 0; font-family: ${fontStack}; background: var(--bg); color: var(--fg); line-height: 1.6; }
     a { color: var(--accent); text-decoration: none; }
     a:hover { text-decoration: underline; }
     .wrap { max-width: 960px; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
     nav { display: flex; gap: 1rem; flex-wrap: wrap; justify-content: space-between; align-items: center; margin-bottom: 3rem; }
     nav .links { display: flex; gap: 0.9rem; flex-wrap: wrap; font-size: 0.9rem; color: var(--muted); }
+    .accent-bar { height: 6px; background: linear-gradient(90deg, var(--accent), #a855f7, var(--accent)); }
     .hero { display: grid; gap: 1.5rem; margin-bottom: 3.5rem; }
-    @media (min-width: 768px) { .hero { grid-template-columns: 1.4fr 0.8fr; align-items: center; } }
+    @media (min-width: 768px) { .hero:not(.hero-center) { grid-template-columns: 1.4fr 0.8fr; align-items: center; } }
+    .hero-center { text-align: center; justify-items: center; }
+    .hero-creative { background: linear-gradient(135deg, ${accent}14, transparent 60%); border: 1px solid var(--border); border-radius: 1.5rem; padding: 2rem; }
     .eyebrow { color: var(--accent); font-weight: 700; font-size: 0.8rem; letter-spacing: 0.08em; text-transform: uppercase; }
     h1 { font-size: clamp(2rem, 4vw, 3rem); line-height: 1.1; margin: 0.4rem 0; }
     .title { color: var(--accent); font-weight: 600; margin: 0; }
-    .lead { color: var(--muted); max-width: 40rem; }
-    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; }
+    .lead { color: var(--muted); max-width: 40rem; ${isBold ? "margin-left:auto;margin-right:auto;" : ""} }
+    .actions { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 1rem; ${isBold ? "justify-content:center;" : ""} }
     .btn { display: inline-flex; align-items: center; justify-content: center; padding: 0.7rem 1.1rem; border-radius: 0.75rem; font-weight: 600; border: 1px solid transparent; }
     .btn-primary { background: var(--accent); color: white; }
     .btn-ghost { border-color: var(--border); color: var(--fg); background: transparent; }
-    .avatar { width: 160px; height: 160px; border-radius: 1.5rem; background: linear-gradient(135deg, var(--accent), #a855f7); display: grid; place-items: center; color: white; font-size: 2.5rem; font-weight: 800; margin-left: auto; margin-right: auto; }
+    .avatar { width: 160px; height: 160px; border-radius: 1.5rem; background: linear-gradient(135deg, var(--accent), #a855f7); display: grid; place-items: center; color: white; font-size: 2.5rem; font-weight: 800; margin-left: auto; margin-right: auto; overflow: hidden; }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
     section { margin: 3rem 0; scroll-margin-top: 1.5rem; }
     .section-title { font-size: 1.35rem; margin: 0 0 1rem; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; padding: 1.1rem 1.2rem; }
@@ -176,7 +221,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     .skill-row { margin-bottom: 0.55rem; }
     .skill-meta { display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 0.2rem; }
     .bar { height: 8px; background: var(--border); border-radius: 999px; overflow: hidden; }
-    .bar span { display: block; height: 100%; background: var(--accent); }
+    .bar span { display: block; height: 100%; background: var(--accent); ${anim ? "transition: width 1s ease;" : ""} }
     .timeline { display: grid; gap: 1.25rem; border-left: 2px solid var(--border); padding-left: 1.1rem; }
     .timeline-item { position: relative; }
     .timeline-dot { position: absolute; left: -1.42rem; top: 0.35rem; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); }
@@ -184,9 +229,15 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     form { display: grid; gap: 0.75rem; }
     input, textarea { width: 100%; padding: 0.7rem 0.8rem; border-radius: 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
     button[type=submit] { justify-self: start; }
+    .socials { margin-top: 0.75rem; font-size: 0.9rem; }
+    ${anim ? `
+    .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.5s ease, transform 0.5s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+    ` : ""}
   </style>
 </head>
 <body>
+  ${data.template !== "minimal" ? `<div class="accent-bar"></div>` : ""}
   <div class="wrap">
     <nav>
       <strong>${escapeHtml(data.fullName || "Portfolio")}</strong>
@@ -199,7 +250,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
       </div>
     </nav>
 
-    <header class="hero">
+    <header class="${heroClass}">
       <div>
         <div class="eyebrow">Hello, I'm</div>
         <h1>${escapeHtml(data.fullName || "Your Name")}</h1>
@@ -210,7 +261,13 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
           <a class="btn btn-ghost" href="#contact">${escapeHtml(data.heroCtaLabel || "Contact")}</a>
         </div>
       </div>
-      <div class="avatar" aria-hidden="true">${escapeHtml((data.fullName || "Y").trim().charAt(0).toUpperCase())}</div>
+      <div class="avatar" aria-hidden="true">
+        ${
+          data.profilePhoto
+            ? `<img src="${escapeHtml(data.profilePhoto)}" alt="${escapeHtml(data.fullName || "Profile")}" />`
+            : escapeHtml((data.fullName || "Y").trim().charAt(0).toUpperCase())
+        }
+      </div>
     </header>
 
     <section id="about">
@@ -234,7 +291,7 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
     ${timeline(data.experience, "Experience")}
     ${timeline(data.education, "Education")}
 
-    ${certs ? `<section id="certifications">${sectionTitle("Certifications")}<ul>${certs}</ul></section>` : ""}
+    ${certs ? `<section id="certifications">${sectionTitle("Certificates")}<ul>${certs}</ul></section>` : ""}
     ${achievements ? `<section id="achievements">${sectionTitle("Achievements")}<ul>${achievements}</ul></section>` : ""}
     ${services}
     ${testimonials ? `<section id="testimonials">${sectionTitle("Testimonials")}<div class="grid">${testimonials}</div></section>` : ""}
@@ -246,11 +303,9 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
         ${data.email ? `Email: <a href="mailto:${escapeHtml(data.email)}">${escapeHtml(data.email)}</a><br/>` : ""}
         ${data.phone ? `Phone: ${escapeHtml(data.phone)}<br/>` : ""}
         ${data.location ? `Location: ${escapeHtml(data.location)}<br/>` : ""}
-        ${data.linkedin ? `<a href="${escapeHtml(data.linkedin)}" target="_blank" rel="noreferrer">LinkedIn</a> · ` : ""}
-        ${data.github ? `<a href="${escapeHtml(data.github)}" target="_blank" rel="noreferrer">GitHub</a> · ` : ""}
-        ${data.portfolioUrl ? `<a href="${escapeHtml(data.portfolioUrl)}" target="_blank" rel="noreferrer">Website</a>` : ""}
       </p>
-      <form onsubmit="event.preventDefault(); alert('Thanks! Connect this form to your backend or Formspree for production.');">
+      ${socialLinksHtml(data)}
+      <form onsubmit="event.preventDefault(); alert('Thanks! Connect this form to your backend or Formspree for production.');" style="margin-top:1.25rem">
         <input name="name" placeholder="Your name" required />
         <input name="email" type="email" placeholder="Your email" required />
         <textarea name="message" rows="4" placeholder="Your message" required></textarea>
@@ -263,20 +318,115 @@ export function buildStaticPortfolioHtml(data: PortfolioData): string {
       ${data.customDomain ? `<p>Custom domain: ${escapeHtml(data.customDomain)}</p>` : ""}
     </footer>
   </div>
+  ${
+    anim
+      ? `<script>
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.12 });
+    document.querySelectorAll('.reveal').forEach((el) => obs.observe(el));
+  </script>`
+      : ""
+  }
 </body>
 </html>`;
+}
+
+export function buildVercelConfig(data: PortfolioData): string {
+  const domain = data.customDomain.trim();
+  if (!domain) {
+    return JSON.stringify({ cleanUrls: true }, null, 2);
+  }
+  return JSON.stringify(
+    {
+      cleanUrls: true,
+      // Add your domain in the Vercel dashboard: Project → Settings → Domains
+      // After DNS is set, Vercel will serve this static site on your custom domain.
+      headers: [
+        {
+          source: "/(.*)",
+          headers: [
+            { key: "X-Content-Type-Options", value: "nosniff" },
+            { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          ],
+        },
+      ],
+    },
+    null,
+    2
+  );
+}
+
+export function buildDeployReadme(data: PortfolioData): string {
+  const domain = data.customDomain.trim() || "yourdomain.com";
+  const slug = data.slug || "portfolio";
+  return `# ${getSeoTitle(data)}
+
+Static portfolio exported from DevLaunch AI.
+
+## Files
+
+- \`index.html\` — self-contained portfolio site
+- \`vercel.json\` — Vercel project config
+- \`README.md\` — this file
+
+## Deploy to Vercel
+
+### Option A — Drag & drop
+1. Go to https://vercel.com/new
+2. Drag this entire folder onto the page
+3. Confirm deploy
+
+### Option B — CLI
+\`\`\`bash
+npx vercel --yes
+\`\`\`
+
+### Option C — Git
+1. Push this folder to a GitHub repo
+2. Import the repo in Vercel
+3. Framework Preset: **Other** (static)
+
+## Custom domain
+
+1. In Vercel: Project → **Settings** → **Domains**
+2. Add \`${domain}\`
+3. At your DNS provider:
+   - **A record** → \`76.76.21.21\` (Vercel), or
+   - **CNAME** for \`www\` → \`cname.vercel-dns.com\`
+4. Wait for SSL (usually automatic)
+
+Suggested public URL: https://${domain}
+Local draft slug: ${slug}
+
+## Form backend
+
+The contact form is a demo. Wire it to Formspree, Basin, or your API for production mail delivery.
+`;
 }
 
 export function downloadStaticPortfolio(data: PortfolioData) {
   const html = buildStaticPortfolioHtml(data);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
+  downloadBlob(blob, `${data.slug || "portfolio"}-portfolio.html`);
+}
+
+export function downloadPortfolioZip(data: PortfolioData) {
   const slug = data.slug || "portfolio";
-  a.href = url;
-  a.download = `${slug}-portfolio.html`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
+  const zip = createZip([
+    { name: "index.html", content: buildStaticPortfolioHtml(data) },
+    { name: "vercel.json", content: buildVercelConfig(data) },
+    { name: "README.md", content: buildDeployReadme(data) },
+    {
+      name: "portfolio-data.json",
+      content: JSON.stringify(data, null, 2),
+    },
+  ]);
+  downloadBlob(zip, `${slug}-portfolio.zip`);
+}
+
+/** Open Vercel new-project page after exporting ZIP for drag-and-drop deploy. */
+export function deployToVercel(data: PortfolioData) {
+  downloadPortfolioZip(data);
+  window.open("https://vercel.com/new", "_blank", "noopener,noreferrer");
 }

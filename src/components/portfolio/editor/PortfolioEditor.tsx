@@ -9,6 +9,8 @@ import {
   Download,
   Rocket,
   ExternalLink,
+  FolderArchive,
+  Globe,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import Field from "@/components/portfolio/editor/Field";
 import SectionShell from "@/components/portfolio/editor/SectionShell";
 import {
+  PORTFOLIO_FONTS,
   SKILL_CATEGORIES,
   createEmptyAchievement,
   createEmptyBlogPost,
@@ -32,13 +35,19 @@ import {
 } from "@/lib/portfolio";
 import {
   generateAboutLocal,
+  generateFullPortfolioLocal,
   generateProjectDescriptionLocal,
   generateSkillsSummaryLocal,
 } from "@/lib/portfolio-ai";
-import { downloadStaticPortfolio } from "@/lib/portfolio-export";
+import {
+  deployToVercel,
+  downloadPortfolioZip,
+  downloadStaticPortfolio,
+} from "@/lib/portfolio-export";
 import type {
   PortfolioData,
   PortfolioEditorSection,
+  PortfolioFontId,
   PortfolioProject,
   PortfolioTemplateId,
   SkillCategory,
@@ -49,6 +58,7 @@ type Props = {
   section: PortfolioEditorSection;
   data: PortfolioData;
   onChange: (patch: Partial<PortfolioData>) => void;
+  onReplace?: (data: PortfolioData) => void;
   onOpenPreview?: () => void;
 };
 
@@ -56,13 +66,14 @@ export default function PortfolioEditor({
   section,
   data,
   onChange,
+  onReplace,
   onOpenPreview,
 }: Props) {
   const [aiLoading, setAiLoading] = useState<string | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
 
   async function runAi(
-    action: "about" | "project" | "skills_summary",
+    action: "about" | "project" | "skills_summary" | "full_portfolio",
     extra?: { projectId?: string }
   ) {
     setAiError(null);
@@ -96,6 +107,12 @@ export default function PortfolioEditor({
                 : p
             ),
           });
+        } else if (action === "full_portfolio" && json.portfolio) {
+          onReplace?.(json.portfolio as PortfolioData);
+          onChange(json.portfolio as Partial<PortfolioData>);
+        }
+        if (json.demo) {
+          setAiError("Using local AI draft (sign in for cloud AI).");
         }
         return;
       }
@@ -119,6 +136,10 @@ export default function PortfolioEditor({
             ),
           });
         }
+      } else if (action === "full_portfolio") {
+        const full = generateFullPortfolioLocal(data);
+        onReplace?.(full);
+        onChange(full);
       }
       if (res.status === 401) {
         setAiError("Using local AI draft (sign in for cloud AI).");
@@ -141,6 +162,10 @@ export default function PortfolioEditor({
             ),
           });
         }
+      } else if (action === "full_portfolio") {
+        const full = generateFullPortfolioLocal(data);
+        onReplace?.(full);
+        onChange(full);
       }
       setAiError("Using local AI draft (network unavailable).");
     } finally {
@@ -1078,19 +1103,44 @@ export default function PortfolioEditor({
   if (section === "contact") {
     return (
       <SectionShell
-        title="Contact"
-        description="Links shown in the contact section and footer."
+        title="Contact & Social Links"
+        description="Contact details and social profiles shown on the site."
       >
+        <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Contact
+        </p>
         <div className="grid gap-4 sm:grid-cols-2">
           {(
             [
               ["email", "Email", "you@email.com"],
               ["phone", "Phone", "+1 …"],
               ["location", "Location", "City, Country"],
+            ] as const
+          ).map(([key, label, placeholder]) => (
+            <Field key={key} label={label} htmlFor={key}>
+              <Input
+                id={key}
+                className="h-10 bg-white"
+                value={data[key]}
+                placeholder={placeholder}
+                onChange={(e) => onChange({ [key]: e.target.value })}
+              />
+            </Field>
+          ))}
+        </div>
+        <p className="pt-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          Social links
+        </p>
+        <div className="grid gap-4 sm:grid-cols-2">
+          {(
+            [
               ["linkedin", "LinkedIn", "https://linkedin.com/in/…"],
               ["github", "GitHub", "https://github.com/…"],
-              ["portfolioUrl", "Portfolio URL", "https://…"],
               ["twitter", "Twitter / X", "https://x.com/…"],
+              ["dribbble", "Dribbble", "https://dribbble.com/…"],
+              ["youtube", "YouTube", "https://youtube.com/@…"],
+              ["medium", "Medium", "https://medium.com/@…"],
+              ["portfolioUrl", "Personal website", "https://…"],
               ["footerTagline", "Footer tagline", "Built with care"],
             ] as const
           ).map(([key, label, placeholder]) => (
@@ -1130,16 +1180,34 @@ export default function PortfolioEditor({
         name: "Bold",
         blurb: "Centered hero and high-impact presentation.",
       },
+      {
+        id: "creative",
+        name: "Creative",
+        blurb: "Gradient hero panel with expressive spacing.",
+      },
+    ];
+
+    const accents = [
+      "#4f46e5",
+      "#7c3aed",
+      "#0ea5e9",
+      "#059669",
+      "#e11d48",
+      "#ea580c",
+      "#0891b2",
+      "#111827",
     ];
 
     return (
       <SectionShell
         title="Design & SEO"
-        description="Template, theme, accent color, and search metadata."
+        description="Templates, theme, custom colors, fonts, animations, and metadata."
       >
         <div>
-          <p className="mb-2 text-sm font-medium text-slate-700">Template</p>
-          <div className="grid gap-3 sm:grid-cols-3">
+          <p className="mb-2 text-sm font-medium text-slate-700">
+            Portfolio templates
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
             {templates.map((t) => (
               <button
                 key={t.id}
@@ -1161,7 +1229,9 @@ export default function PortfolioEditor({
 
         <div className="flex flex-wrap items-center gap-6">
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-slate-700">Dark mode</span>
+            <span className="text-sm font-medium text-slate-700">
+              Dark / Light
+            </span>
             <Switch
               checked={data.themeMode === "dark"}
               onCheckedChange={(checked) =>
@@ -1172,22 +1242,73 @@ export default function PortfolioEditor({
               {data.themeMode === "dark" ? "Dark" : "Light"}
             </Badge>
           </div>
-          <Field label="Accent color" htmlFor="accent">
-            <div className="flex items-center gap-2">
-              <input
-                id="accent"
-                type="color"
-                value={data.accentColor}
-                onChange={(e) => onChange({ accentColor: e.target.value })}
-                className="h-10 w-12 cursor-pointer rounded border border-slate-200 bg-white p-1"
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-medium text-slate-700">
+              Animations
+            </span>
+            <Switch
+              checked={data.animationsEnabled !== false}
+              onCheckedChange={(checked) =>
+                onChange({ animationsEnabled: Boolean(checked) })
+              }
+            />
+          </div>
+        </div>
+
+        <Field label="Custom accent color" htmlFor="accent">
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              id="accent"
+              type="color"
+              value={data.accentColor}
+              onChange={(e) => onChange({ accentColor: e.target.value })}
+              className="h-10 w-12 cursor-pointer rounded border border-slate-200 bg-white p-1"
+            />
+            <Input
+              className="h-10 w-28 bg-white font-mono text-xs"
+              value={data.accentColor}
+              onChange={(e) => onChange({ accentColor: e.target.value })}
+            />
+            {accents.map((c) => (
+              <button
+                key={c}
+                type="button"
+                title={c}
+                onClick={() => onChange({ accentColor: c })}
+                className={cn(
+                  "h-8 w-8 rounded-full border-2 transition",
+                  data.accentColor === c
+                    ? "border-slate-900 scale-110"
+                    : "border-transparent"
+                )}
+                style={{ backgroundColor: c }}
               />
-              <Input
-                className="h-10 w-28 bg-white font-mono text-xs"
-                value={data.accentColor}
-                onChange={(e) => onChange({ accentColor: e.target.value })}
-              />
-            </div>
-          </Field>
+            ))}
+          </div>
+        </Field>
+
+        <div>
+          <p className="mb-2 text-sm font-medium text-slate-700">Fonts</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {PORTFOLIO_FONTS.map((f) => (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() =>
+                  onChange({ fontFamily: f.id as PortfolioFontId })
+                }
+                className={cn(
+                  "rounded-xl border px-3 py-2.5 text-left text-sm transition",
+                  data.fontFamily === f.id
+                    ? "border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200"
+                    : "border-slate-200 bg-white hover:border-slate-300"
+                )}
+                style={{ fontFamily: f.stack }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         <Field label="SEO title" htmlFor="seoTitle">
@@ -1216,12 +1337,12 @@ export default function PortfolioEditor({
   return (
     <SectionShell
       title="Deploy & Export"
-      description="Custom domain, static download, and one-click publish path."
+      description="Export HTML/ZIP, deploy to Vercel, and configure a custom domain."
     >
       <Field
         label="Portfolio slug"
         htmlFor="slug"
-        hint="Public path: /p/your-slug"
+        hint="In-app preview path: /p/your-slug"
       >
         <Input
           id="slug"
@@ -1233,7 +1354,7 @@ export default function PortfolioEditor({
       <Field
         label="Custom domain"
         htmlFor="domain"
-        hint="Point a CNAME to your host after deploying static files (e.g. alexchen.dev)."
+        hint="After Vercel deploy: Project → Settings → Domains. Add A record 76.76.21.21 or CNAME to cname.vercel-dns.com."
       >
         <Input
           id="domain"
@@ -1258,7 +1379,15 @@ export default function PortfolioEditor({
           }}
         >
           <Rocket className="h-4 w-4" />
-          One-click publish
+          Publish preview
+        </Button>
+        <Button
+          type="button"
+          className="h-11 gap-2 bg-slate-900 hover:bg-slate-800"
+          onClick={() => deployToVercel(data)}
+        >
+          <Globe className="h-4 w-4" />
+          Deploy to Vercel
         </Button>
         <Button
           type="button"
@@ -1267,7 +1396,16 @@ export default function PortfolioEditor({
           onClick={() => downloadStaticPortfolio(data)}
         >
           <Download className="h-4 w-4" />
-          Download static HTML
+          Export HTML
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="h-11 gap-2"
+          onClick={() => downloadPortfolioZip(data)}
+        >
+          <FolderArchive className="h-4 w-4" />
+          Export ZIP
         </Button>
         <Button
           type="button"
@@ -1283,16 +1421,21 @@ export default function PortfolioEditor({
       <div className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-600 space-y-2">
         <p className="font-semibold text-slate-800">Deploy checklist</p>
         <ol className="list-decimal space-y-1 pl-5">
-          <li>Download the static HTML file.</li>
           <li>
-            Drop it into Vercel, Netlify, Cloudflare Pages, or GitHub Pages.
+            <strong>Export ZIP</strong> (includes <code className="text-xs">index.html</code>,{" "}
+            <code className="text-xs">vercel.json</code>, README).
           </li>
           <li>
-            Attach your custom domain and enable HTTPS.
+            <strong>Deploy to Vercel</strong> downloads the ZIP and opens vercel.com/new —
+            drag the unzipped folder to deploy.
           </li>
           <li>
-            Optionally sync JSON to Supabase <code className="text-xs">portfolios</code> table
-            for multi-device editing.
+            Add your <strong>custom domain</strong> in Vercel → Settings → Domains
+            {data.customDomain ? ` (${data.customDomain})` : ""}.
+          </li>
+          <li>
+            Point DNS: A → <code className="text-xs">76.76.21.21</code> or CNAME →{" "}
+            <code className="text-xs">cname.vercel-dns.com</code>.
           </li>
         </ol>
         {data.published && (

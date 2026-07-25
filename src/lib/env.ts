@@ -18,6 +18,7 @@ export function isSupabaseConfigured(): boolean {
   return (
     !!url &&
     !!key &&
+    (url.startsWith("http://") || url.startsWith("https://")) &&
     url !== "https://your-project-id.supabase.co" &&
     key !== "your-anon-key-here" &&
     !url.includes("dummy.supabase")

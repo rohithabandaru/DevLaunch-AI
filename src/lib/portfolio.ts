@@ -4,6 +4,7 @@ import type {
   CertificationItem,
   PortfolioData,
   PortfolioEditorSection,
+  PortfolioFontId,
   PortfolioProject,
   PortfolioSkill,
   ServiceItem,
@@ -112,19 +113,14 @@ export const EDITOR_SECTIONS: {
 }[] = [
   { id: "hero", label: "Hero", description: "Name, title, photo, intro" },
   { id: "about", label: "About", description: "Bio, objective, experience" },
-  { id: "skills", label: "Skills", description: "Categorized skills & levels" },
-  { id: "projects", label: "Projects", description: "Featured work showcase" },
-  { id: "experience", label: "Experience", description: "Career timeline" },
   { id: "education", label: "Education", description: "Academic timeline" },
+  { id: "experience", label: "Experience", description: "Career timeline" },
+  { id: "projects", label: "Projects", description: "Featured work showcase" },
+  { id: "skills", label: "Skills", description: "Categorized skills & levels" },
   {
     id: "certifications",
-    label: "Certifications",
+    label: "Certificates",
     description: "Credentials & courses",
-  },
-  {
-    id: "achievements",
-    label: "Achievements",
-    description: "Awards & highlights",
   },
   { id: "services", label: "Services", description: "Optional offerings" },
   {
@@ -132,19 +128,80 @@ export const EDITOR_SECTIONS: {
     label: "Testimonials",
     description: "Client & peer quotes",
   },
+  {
+    id: "achievements",
+    label: "Achievements",
+    description: "Awards & highlights",
+  },
   { id: "blog", label: "Blog", description: "Optional writing links" },
-  { id: "contact", label: "Contact", description: "Links & form fields" },
+  { id: "contact", label: "Contact", description: "Social links & form" },
   {
     id: "design",
     label: "Design",
-    description: "Template, theme, SEO",
+    description: "Template, theme, fonts",
   },
   {
     id: "deploy",
     label: "Deploy",
-    description: "Domain, export, publish",
+    description: "Export, Vercel, domain",
   },
 ];
+
+export const PORTFOLIO_FONTS: {
+  id: PortfolioFontId;
+  label: string;
+  stack: string;
+  googleUrl?: string;
+}[] = [
+  {
+    id: "inter",
+    label: "Inter",
+    stack: '"Inter", ui-sans-serif, system-ui, sans-serif',
+    googleUrl:
+      "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap",
+  },
+  {
+    id: "space-grotesk",
+    label: "Space Grotesk",
+    stack: '"Space Grotesk", ui-sans-serif, system-ui, sans-serif',
+    googleUrl:
+      "https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap",
+  },
+  {
+    id: "dm-sans",
+    label: "DM Sans",
+    stack: '"DM Sans", ui-sans-serif, system-ui, sans-serif',
+    googleUrl:
+      "https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap",
+  },
+  {
+    id: "playfair",
+    label: "Playfair Display",
+    stack: '"Playfair Display", Georgia, serif',
+    googleUrl:
+      "https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800&display=swap",
+  },
+  {
+    id: "jetbrains",
+    label: "JetBrains Mono",
+    stack: '"JetBrains Mono", ui-monospace, monospace',
+    googleUrl:
+      "https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap",
+  },
+];
+
+export function getFontStack(fontId: PortfolioFontId | undefined): string {
+  return (
+    PORTFOLIO_FONTS.find((f) => f.id === fontId)?.stack ??
+    PORTFOLIO_FONTS[0].stack
+  );
+}
+
+export function getFontGoogleUrl(
+  fontId: PortfolioFontId | undefined
+): string | undefined {
+  return PORTFOLIO_FONTS.find((f) => f.id === fontId)?.googleUrl;
+}
 
 export const emptyPortfolio: PortfolioData = {
   slug: "my-portfolio",
@@ -154,6 +211,8 @@ export const emptyPortfolio: PortfolioData = {
   template: "modern",
   themeMode: "light",
   accentColor: "#4f46e5",
+  fontFamily: "inter",
+  animationsEnabled: true,
   published: false,
 
   fullName: "",
@@ -188,6 +247,9 @@ export const emptyPortfolio: PortfolioData = {
   github: "",
   portfolioUrl: "",
   twitter: "",
+  dribbble: "",
+  youtube: "",
+  medium: "",
 
   footerTagline: "Built with DevLaunch AI",
 };
@@ -365,11 +427,50 @@ export function createSamplePortfolio(): PortfolioData {
     linkedin: "https://linkedin.com/in/",
     github: "https://github.com/",
     portfolioUrl: "https://alexchen.dev",
-    twitter: "",
+    twitter: "https://x.com/",
+    dribbble: "",
+    youtube: "",
+    medium: "",
     footerTagline: "Designed for impact. Built with care.",
     template: "modern",
     themeMode: "light",
     accentColor: "#4f46e5",
+    fontFamily: "inter",
+    animationsEnabled: true,
+  };
+}
+
+/** Merge stored drafts safely with defaults (handles older localStorage shapes). */
+export function normalizePortfolio(raw: Partial<PortfolioData> | null | undefined): PortfolioData {
+  const base = emptyPortfolio;
+  if (!raw || typeof raw !== "object") return { ...base, projects: [createEmptyProject()], experience: [createEmptyTimeline()], education: [createEmptyTimeline()] };
+
+  return {
+    ...base,
+    ...raw,
+    skills: Array.isArray(raw.skills) ? raw.skills : base.skills,
+    projects:
+      Array.isArray(raw.projects) && raw.projects.length
+        ? raw.projects
+        : [createEmptyProject()],
+    experience:
+      Array.isArray(raw.experience) && raw.experience.length
+        ? raw.experience
+        : [createEmptyTimeline()],
+    education:
+      Array.isArray(raw.education) && raw.education.length
+        ? raw.education
+        : [createEmptyTimeline()],
+    certifications: Array.isArray(raw.certifications) ? raw.certifications : [],
+    achievements: Array.isArray(raw.achievements) ? raw.achievements : [],
+    services: Array.isArray(raw.services) ? raw.services : [],
+    testimonials: Array.isArray(raw.testimonials) ? raw.testimonials : [],
+    blogPosts: Array.isArray(raw.blogPosts) ? raw.blogPosts : [],
+    fontFamily: raw.fontFamily ?? "inter",
+    animationsEnabled: raw.animationsEnabled ?? true,
+    dribbble: raw.dribbble ?? "",
+    youtube: raw.youtube ?? "",
+    medium: raw.medium ?? "",
   };
 }
 

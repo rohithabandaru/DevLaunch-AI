@@ -3,8 +3,6 @@
 import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import {
-  Github,
-  Linkedin,
   Mail,
   Phone,
   MapPin,
@@ -19,9 +17,57 @@ import {
   GraduationCap,
   Star,
 } from "lucide-react";
-import { SKILL_CATEGORIES, getSeoTitle } from "@/lib/portfolio";
+import {
+  SKILL_CATEGORIES,
+  getFontGoogleUrl,
+  getFontStack,
+  getSeoTitle,
+} from "@/lib/portfolio";
 import type { PortfolioData, PortfolioTemplateId } from "@/types/portfolio";
 import { cn } from "@/lib/utils";
+
+function Github(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4" />
+      <path d="M9 18c-4.51 2-5-2-7-2" />
+    </svg>
+  );
+}
+
+function Linkedin(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z" />
+      <rect x="2" y="9" width="4" height="12" />
+      <circle cx="4" cy="4" r="2" />
+    </svg>
+  );
+}
+
+function TwitterX(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.727-8.835L1.254 2.25H8.08l4.253 5.622zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
 
 type Props = {
   data: PortfolioData;
@@ -48,6 +94,7 @@ function templateClasses(template: PortfolioTemplateId) {
         hero: "text-left",
         accentBar: false,
         dense: true,
+        creative: false,
       };
     case "bold":
       return {
@@ -55,6 +102,15 @@ function templateClasses(template: PortfolioTemplateId) {
         hero: "text-center",
         accentBar: true,
         dense: false,
+        creative: false,
+      };
+    case "creative":
+      return {
+        radius: "rounded-3xl",
+        hero: "text-left",
+        accentBar: true,
+        dense: false,
+        creative: true,
       };
     default:
       return {
@@ -62,6 +118,7 @@ function templateClasses(template: PortfolioTemplateId) {
         hero: "text-left md:text-left",
         accentBar: true,
         dense: false,
+        creative: false,
       };
   }
 }
@@ -80,6 +137,9 @@ export default function PortfolioSite({ data, preview, className }: Props) {
   const isDark = data.themeMode === "dark";
   const tpl = templateClasses(data.template);
   const accent = data.accentColor || "#4f46e5";
+  const anim = data.animationsEnabled !== false;
+  const fontStack = getFontStack(data.fontFamily);
+  const fontUrl = getFontGoogleUrl(data.fontFamily);
 
   const skillsByCategory = useMemo(
     () =>
@@ -102,15 +162,41 @@ export default function PortfolioSite({ data, preview, className }: Props) {
     (e) => e.title.trim() || e.organization.trim()
   );
 
+  const socials = [
+    { href: data.linkedin, label: "LinkedIn", icon: Linkedin },
+    { href: data.github, label: "GitHub", icon: Github },
+    { href: data.twitter, label: "Twitter", icon: TwitterX },
+    { href: data.portfolioUrl, label: "Website", icon: Globe },
+    { href: data.dribbble, label: "Dribbble", icon: ExternalLink },
+    { href: data.youtube, label: "YouTube", icon: ExternalLink },
+    { href: data.medium, label: "Medium", icon: BookOpen },
+  ].filter((s) => s.href?.trim());
+
+  const motionProps = anim
+    ? {
+        variants: stagger,
+        initial: "hidden" as const,
+        whileInView: "show" as const,
+        viewport: { once: true, amount: 0.2 },
+      }
+    : {};
+
   return (
     <div
       className={cn(
-        "min-h-full font-sans transition-colors duration-300",
+        "min-h-full transition-colors duration-300",
         isDark ? "bg-slate-950 text-slate-100" : "bg-white text-slate-900",
         className
       )}
-      style={{ ["--portfolio-accent" as string]: accent }}
+      style={{
+        ["--portfolio-accent" as string]: accent,
+        fontFamily: fontStack,
+      }}
     >
+      {fontUrl && (
+        // eslint-disable-next-line @next/next/no-page-custom-font
+        <link rel="stylesheet" href={fontUrl} />
+      )}
       {/* SEO-friendly document title hint for live preview */}
       <span className="sr-only">{getSeoTitle(data)}</span>
 
@@ -165,27 +251,36 @@ export default function PortfolioSite({ data, preview, className }: Props) {
         {/* 1. Hero */}
         <motion.section
           id="p-hero"
-          variants={stagger}
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
+          {...motionProps}
           className={cn(
             "mb-16 grid items-center gap-8",
             data.template === "bold"
               ? "justify-items-center text-center"
-              : "md:grid-cols-[1.3fr_0.7fr]"
+              : "md:grid-cols-[1.3fr_0.7fr]",
+            tpl.creative &&
+              cn(
+                "rounded-3xl border p-6 sm:p-8",
+                isDark ? "border-slate-800" : "border-slate-200"
+              )
           )}
+          style={
+            tpl.creative
+              ? {
+                  background: `linear-gradient(135deg, ${accent}18, transparent 65%)`,
+                }
+              : undefined
+          }
         >
           <div className={cn(tpl.hero, data.template === "bold" && "max-w-2xl")}>
             <motion.p
-              variants={fadeUp}
+              variants={anim ? fadeUp : undefined}
               className="text-xs font-bold uppercase tracking-[0.18em]"
               style={{ color: accent }}
             >
               Hello, I&apos;m
             </motion.p>
             <motion.h1
-              variants={fadeUp}
+              variants={anim ? fadeUp : undefined}
               className={cn(
                 "mt-2 font-extrabold tracking-tight",
                 preview ? "text-3xl sm:text-4xl" : "text-4xl sm:text-5xl"
@@ -194,14 +289,14 @@ export default function PortfolioSite({ data, preview, className }: Props) {
               {data.fullName || "Your Name"}
             </motion.h1>
             <motion.p
-              variants={fadeUp}
+              variants={anim ? fadeUp : undefined}
               className="mt-2 text-lg font-semibold"
               style={{ color: accent }}
             >
               {data.title || "Professional Title"}
             </motion.p>
             <motion.p
-              variants={fadeUp}
+              variants={anim ? fadeUp : undefined}
               className={cn(
                 "mt-4 max-w-xl leading-relaxed",
                 isDark ? "text-slate-300" : "text-slate-600",
@@ -212,7 +307,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
                 "A short introduction about who you are and what you build."}
             </motion.p>
             <motion.div
-              variants={fadeUp}
+              variants={anim ? fadeUp : undefined}
               className={cn(
                 "mt-6 flex flex-wrap gap-3",
                 data.template === "bold" && "justify-center"
@@ -254,7 +349,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           </div>
 
           <motion.div
-            variants={fadeUp}
+            variants={anim ? fadeUp : undefined}
             className={cn(
               "mx-auto flex h-40 w-40 items-center justify-center overflow-hidden shadow-xl sm:h-48 sm:w-48",
               tpl.radius,
@@ -287,6 +382,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="About"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<Sparkles className="h-4 w-4" />}
         >
           <p className={cn("leading-relaxed", isDark ? "text-slate-300" : "text-slate-600")}>
@@ -314,6 +410,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="Skills"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<Star className="h-4 w-4" />}
         >
           {data.skillsSummary && (
@@ -396,6 +493,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="Projects"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<Briefcase className="h-4 w-4" />}
         >
           {projects.length === 0 ? (
@@ -509,9 +607,16 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="Experience"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<Briefcase className="h-4 w-4" />}
         >
-          <Timeline items={experience} isDark={isDark} accent={accent} empty="Add work experience." />
+          <Timeline
+            items={experience}
+            isDark={isDark}
+            accent={accent}
+            anim={anim}
+            empty="Add work experience."
+          />
         </Section>
 
         {/* 6. Education timeline */}
@@ -520,18 +625,26 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="Education"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<GraduationCap className="h-4 w-4" />}
         >
-          <Timeline items={education} isDark={isDark} accent={accent} empty="Add education." />
+          <Timeline
+            items={education}
+            isDark={isDark}
+            accent={accent}
+            anim={anim}
+            empty="Add education."
+          />
         </Section>
 
         {/* 7. Certifications */}
         {data.certifications.some((c) => c.name.trim()) && (
           <Section
             id="p-certifications"
-            title="Certifications"
+            title="Certificates"
             isDark={isDark}
             accent={accent}
+            anim={anim}
             icon={<Award className="h-4 w-4" />}
           >
             <ul className="space-y-3">
@@ -577,6 +690,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
             title="Achievements"
             isDark={isDark}
             accent={accent}
+            anim={anim}
             icon={<Award className="h-4 w-4" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -613,6 +727,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
             title="Services"
             isDark={isDark}
             accent={accent}
+            anim={anim}
             icon={<Sparkles className="h-4 w-4" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -646,6 +761,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
             title="Testimonials"
             isDark={isDark}
             accent={accent}
+            anim={anim}
             icon={<Quote className="h-4 w-4" />}
           >
             <div className="grid gap-4">
@@ -683,6 +799,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
             title="Blog"
             isDark={isDark}
             accent={accent}
+            anim={anim}
             icon={<BookOpen className="h-4 w-4" />}
           >
             <div className="grid gap-3 sm:grid-cols-2">
@@ -722,6 +839,7 @@ export default function PortfolioSite({ data, preview, className }: Props) {
           title="Contact"
           isDark={isDark}
           accent={accent}
+          anim={anim}
           icon={<Mail className="h-4 w-4" />}
         >
           <div className="grid gap-6 md:grid-cols-2">
@@ -746,32 +864,35 @@ export default function PortfolioSite({ data, preview, className }: Props) {
                   {data.location}
                 </p>
               )}
-              {data.linkedin && (
-                <p className="flex items-center gap-2">
-                  <Linkedin className="h-4 w-4" style={{ color: accent }} />
-                  <a href={data.linkedin} target="_blank" rel="noreferrer" className="hover:underline">
-                    LinkedIn
-                  </a>
-                </p>
+              {socials.length > 0 && (
+                <div className="flex flex-wrap gap-2 pt-2">
+                  {socials.map((s) => {
+                    const Icon = s.icon;
+                    return (
+                      <a
+                        key={s.label}
+                        href={s.href}
+                        target="_blank"
+                        rel="noreferrer"
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition hover:opacity-90",
+                          isDark
+                            ? "border-slate-700 bg-slate-900"
+                            : "border-slate-200 bg-white"
+                        )}
+                        style={{ color: accent }}
+                      >
+                        <Icon className="h-3.5 w-3.5" />
+                        {s.label}
+                      </a>
+                    );
+                  })}
+                </div>
               )}
-              {data.github && (
-                <p className="flex items-center gap-2">
-                  <Github className="h-4 w-4" style={{ color: accent }} />
-                  <a href={data.github} target="_blank" rel="noreferrer" className="hover:underline">
-                    GitHub
-                  </a>
+              {!data.email && !data.phone && socials.length === 0 && (
+                <p className="text-slate-400">
+                  Add contact details and social links in the editor.
                 </p>
-              )}
-              {data.portfolioUrl && (
-                <p className="flex items-center gap-2">
-                  <Globe className="h-4 w-4" style={{ color: accent }} />
-                  <a href={data.portfolioUrl} target="_blank" rel="noreferrer" className="hover:underline">
-                    Portfolio
-                  </a>
-                </p>
-              )}
-              {!data.email && !data.phone && !data.linkedin && !data.github && (
-                <p className="text-slate-400">Add contact details in the editor.</p>
               )}
             </div>
 
@@ -858,6 +979,7 @@ function Section({
   isDark,
   accent,
   icon,
+  anim = true,
 }: {
   id: string;
   title: string;
@@ -865,12 +987,13 @@ function Section({
   isDark: boolean;
   accent: string;
   icon?: React.ReactNode;
+  anim?: boolean;
 }) {
   return (
     <motion.section
       id={id}
-      initial={{ opacity: 0, y: 20 }}
-      whileInView={{ opacity: 1, y: 0 }}
+      initial={anim ? { opacity: 0, y: 20 } : false}
+      whileInView={anim ? { opacity: 1, y: 0 } : undefined}
       viewport={{ once: true, amount: 0.15 }}
       transition={{ duration: 0.45 }}
       className="mb-14 scroll-mt-6"
@@ -889,11 +1012,13 @@ function Timeline({
   isDark,
   accent,
   empty,
+  anim = true,
 }: {
   items: PortfolioData["experience"];
   isDark: boolean;
   accent: string;
   empty: string;
+  anim?: boolean;
 }) {
   if (!items.length) {
     return <p className="text-sm text-slate-400">{empty}</p>;
@@ -909,8 +1034,8 @@ function Timeline({
       {items.map((item, i) => (
         <motion.div
           key={item.id}
-          initial={{ opacity: 0, x: -10 }}
-          whileInView={{ opacity: 1, x: 0 }}
+          initial={anim ? { opacity: 0, x: -10 } : false}
+          whileInView={anim ? { opacity: 1, x: 0 } : undefined}
           viewport={{ once: true }}
           transition={{ delay: i * 0.05 }}
           className="relative"
