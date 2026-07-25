@@ -1,4 +1,16 @@
-export type PortfolioTemplateId = "modern" | "minimal" | "bold" | "creative";
+/** Portfolio template / visual theme identifiers */
+export type PortfolioTemplateId =
+  | "modern"
+  | "minimal"
+  | "developer"
+  | "creative"
+  | "startup"
+  | "corporate"
+  | "dark"
+  | "glassmorphism"
+  | "gradient"
+  /** @deprecated use developer */
+  | "bold";
 
 export type PortfolioFontId =
   | "inter"
@@ -8,13 +20,15 @@ export type PortfolioFontId =
   | "jetbrains";
 
 export type SkillCategory =
-  | "languages"
   | "frontend"
   | "backend"
   | "databases"
-  | "frameworks"
   | "cloud"
-  | "tools";
+  | "devops"
+  | "languages"
+  | "tools"
+  | "soft"
+  | "frameworks";
 
 export type PortfolioSkill = {
   id: string;
@@ -28,10 +42,14 @@ export type PortfolioProject = {
   name: string;
   description: string;
   image: string;
+  images: string[];
   technologies: string[];
   github: string;
   liveDemo: string;
   featured: boolean;
+  features: string[];
+  challenges: string;
+  achievements: string;
 };
 
 export type TimelineItem = {
@@ -43,6 +61,13 @@ export type TimelineItem = {
   endDate: string;
   current: boolean;
   description: string;
+  /** Education extras */
+  college?: string;
+  university?: string;
+  cgpa?: string;
+  /** Experience extras */
+  employmentType?: string;
+  technologies?: string[];
 };
 
 export type CertificationItem = {
@@ -84,10 +109,52 @@ export type BlogPost = {
   date: string;
 };
 
+export type LanguageItem = {
+  id: string;
+  name: string;
+  proficiency: string;
+};
+
+export type HobbyItem = {
+  id: string;
+  name: string;
+};
+
 export type PortfolioThemeMode = "light" | "dark";
+
+export type PortfolioSpacing = "compact" | "comfortable" | "spacious";
+
+/** Toggleable site sections for show/hide + ordering */
+export type PortfolioSectionKey =
+  | "hero"
+  | "about"
+  | "skills"
+  | "projects"
+  | "experience"
+  | "education"
+  | "certifications"
+  | "achievements"
+  | "languages"
+  | "hobbies"
+  | "services"
+  | "testimonials"
+  | "blog"
+  | "contact";
+
+export type PortfolioSectionVisibility = Record<PortfolioSectionKey, boolean>;
+
+export type PortfolioAnalytics = {
+  views: number;
+  uniqueVisitors: number;
+  resumeDownloads: number;
+  contactSubmissions: number;
+  githubClicks: number;
+  linkedinClicks: number;
+};
 
 export type PortfolioData = {
   // Meta / SEO / deploy
+  id?: string;
   slug: string;
   customDomain: string;
   seoTitle: string;
@@ -95,21 +162,32 @@ export type PortfolioData = {
   template: PortfolioTemplateId;
   themeMode: PortfolioThemeMode;
   accentColor: string;
+  secondaryColor: string;
   fontFamily: PortfolioFontId;
   animationsEnabled: boolean;
+  spacing: PortfolioSpacing;
   published: boolean;
+  publishedAt: string;
+  updatedAt: string;
+  sectionOrder: PortfolioSectionKey[];
+  sectionVisibility: PortfolioSectionVisibility;
 
-  // Hero
+  // Hero / personal
   fullName: string;
   title: string;
   profilePhoto: string;
+  heroImage: string;
+  backgroundImage: string;
   introduction: string;
   resumeUrl: string;
   heroCtaLabel: string;
+  heroHeadline: string;
+  tagline: string;
 
   // About
   biography: string;
   careerObjective: string;
+  professionalSummary: string;
   yearsExperience: string;
 
   // Skills
@@ -129,6 +207,8 @@ export type PortfolioData = {
   services: ServiceItem[];
   testimonials: TestimonialItem[];
   blogPosts: BlogPost[];
+  languages: LanguageItem[];
+  hobbies: HobbyItem[];
   showServices: boolean;
   showBlog: boolean;
 
@@ -136,19 +216,31 @@ export type PortfolioData = {
   email: string;
   phone: string;
   location: string;
+  mapsEmbedUrl: string;
+  showContactForm: boolean;
+  showMaps: boolean;
   linkedin: string;
   github: string;
   portfolioUrl: string;
   twitter: string;
+  instagram: string;
   dribbble: string;
   youtube: string;
   medium: string;
+  devto: string;
+  leetcode: string;
+  hackerrank: string;
 
   // Footer
   footerTagline: string;
+
+  // Analytics (client cache / demo)
+  analytics: PortfolioAnalytics;
 };
 
 export type PortfolioEditorSection =
+  | "dashboard"
+  | "personal"
   | "hero"
   | "about"
   | "skills"
@@ -157,15 +249,33 @@ export type PortfolioEditorSection =
   | "education"
   | "certifications"
   | "achievements"
+  | "languages"
+  | "hobbies"
   | "services"
   | "testimonials"
   | "blog"
   | "contact"
   | "design"
-  | "deploy";
+  | "deploy"
+  | "ai";
 
 export type PortfolioAiAction =
   | "about"
+  | "bio"
   | "project"
   | "skills_summary"
-  | "full_portfolio";
+  | "full_portfolio"
+  | "improve"
+  | "rewrite"
+  | "fix_grammar"
+  | "seo"
+  | "hero_headline"
+  | "cta";
+
+export type PortfolioCompletionBreakdown = {
+  percent: number;
+  filled: number;
+  total: number;
+  missing: string[];
+  sections: { key: string; label: string; complete: boolean; weight: number }[];
+};

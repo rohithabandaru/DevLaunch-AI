@@ -25,9 +25,14 @@ function socialLinksHtml(data: PortfolioData): string {
   if (data.linkedin) links.push({ href: data.linkedin, label: "LinkedIn" });
   if (data.github) links.push({ href: data.github, label: "GitHub" });
   if (data.twitter) links.push({ href: data.twitter, label: "Twitter / X" });
+  if (data.instagram) links.push({ href: data.instagram, label: "Instagram" });
   if (data.dribbble) links.push({ href: data.dribbble, label: "Dribbble" });
   if (data.youtube) links.push({ href: data.youtube, label: "YouTube" });
   if (data.medium) links.push({ href: data.medium, label: "Medium" });
+  if (data.devto) links.push({ href: data.devto, label: "Dev.to" });
+  if (data.leetcode) links.push({ href: data.leetcode, label: "LeetCode" });
+  if (data.hackerrank)
+    links.push({ href: data.hackerrank, label: "HackerRank" });
   if (data.portfolioUrl)
     links.push({ href: data.portfolioUrl, label: "Website" });
   if (!links.length) return "";
@@ -409,6 +414,81 @@ export function downloadStaticPortfolio(data: PortfolioData) {
   const html = buildStaticPortfolioHtml(data);
   const blob = new Blob([html], { type: "text/html;charset=utf-8" });
   downloadBlob(blob, `${data.slug || "portfolio"}-portfolio.html`);
+}
+
+export function downloadPortfolioJson(data: PortfolioData) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: "application/json;charset=utf-8",
+  });
+  downloadBlob(blob, `${data.slug || "portfolio"}-portfolio.json`);
+}
+
+/** Printable one-page PDF summary via browser print dialog. */
+export function downloadPortfolioPdfSummary(data: PortfolioData) {
+  const title = escapeHtml(getSeoTitle(data));
+  const skills = data.skills
+    .filter((s) => s.name.trim())
+    .map((s) => escapeHtml(s.name))
+    .join(", ");
+  const projects = data.projects
+    .filter((p) => p.name.trim())
+    .slice(0, 6)
+    .map(
+      (p) =>
+        `<li><strong>${escapeHtml(p.name)}</strong> — ${escapeHtml(
+          p.description.slice(0, 140)
+        )}${p.description.length > 140 ? "…" : ""}</li>`
+    )
+    .join("");
+  const experience = data.experience
+    .filter((e) => e.title.trim() || e.organization.trim())
+    .map(
+      (e) =>
+        `<li><strong>${escapeHtml(e.title)}</strong> @ ${escapeHtml(
+          e.organization
+        )} (${escapeHtml(e.startDate)}${
+          e.current ? " – Present" : e.endDate ? ` – ${escapeHtml(e.endDate)}` : ""
+        })</li>`
+    )
+    .join("");
+
+  const html = `<!DOCTYPE html>
+<html><head><meta charset="utf-8"/><title>${title} — Summary</title>
+<style>
+  body{font-family:Inter,system-ui,sans-serif;max-width:720px;margin:40px auto;padding:0 24px;color:#0f172a;line-height:1.5}
+  h1{font-size:1.75rem;margin:0 0 .25rem}
+  .muted{color:#64748b}
+  h2{font-size:1rem;margin:1.5rem 0 .5rem;border-bottom:1px solid #e2e8f0;padding-bottom:.35rem}
+  ul{padding-left:1.1rem;margin:.4rem 0}
+  @media print{body{margin:0}}
+</style></head><body>
+  <h1>${escapeHtml(data.fullName || "Portfolio")}</h1>
+  <p class="muted">${escapeHtml(data.title || "")}${
+    data.location ? ` · ${escapeHtml(data.location)}` : ""
+  }</p>
+  <p>${escapeHtml(data.professionalSummary || data.introduction || "")}</p>
+  <h2>Contact</h2>
+  <p>${escapeHtml(data.email || "—")}${data.phone ? ` · ${escapeHtml(data.phone)}` : ""}</p>
+  <h2>Skills</h2>
+  <p>${skills || "—"}</p>
+  <h2>Experience</h2>
+  <ul>${experience || "<li>—</li>"}</ul>
+  <h2>Projects</h2>
+  <ul>${projects || "<li>—</li>"}</ul>
+  <h2>About</h2>
+  <p>${escapeHtml(data.biography || "—")}</p>
+  <script>window.onload=function(){window.print()}</script>
+</body></html>`;
+
+  const win = window.open("", "_blank", "noopener,noreferrer");
+  if (!win) {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    downloadBlob(blob, `${data.slug || "portfolio"}-summary.html`);
+    return;
+  }
+  win.document.open();
+  win.document.write(html);
+  win.document.close();
 }
 
 export function downloadPortfolioZip(data: PortfolioData) {
