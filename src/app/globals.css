@@ -146,28 +146,6 @@
 
 /* Print Styles */
 @media print {
-  /* Hide all elements by default */
-  body * {
-    visibility: hidden;
-  }
-  
-  /* Show only the targeted print areas and their children */
-  #resume-print-area, #resume-print-area *,
-  #portfolio-print-area, #portfolio-print-area * {
-    visibility: visible;
-  }
-
-  /* Move the print area to the absolute top-left of the paper */
-  #resume-print-area,
-  #portfolio-print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 0;
-  }
-
   /* Force background colors/images to print (essential for glassmorphism/Tailwind) */
   * {
     -webkit-print-color-adjust: exact !important;

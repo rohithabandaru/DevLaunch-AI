@@ -217,9 +217,9 @@ export default function PortfolioBuilderPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0">
       {/* Top Banner */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl print:hidden">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-cyan-500/30 bg-cyan-500/10 px-3 py-1 text-xs font-semibold text-cyan-300">
             <Globe className="h-3.5 w-3.5" /> Portfolio Studio
@@ -261,9 +261,9 @@ export default function PortfolioBuilderPage() {
 
 
       {/* Main Split Workspace */}
-      <div className="grid gap-6 xl:grid-cols-12">
+      <div className="grid gap-6 xl:grid-cols-12 print:block">
         {/* Left Control Panel */}
-        <div className="xl:col-span-5 space-y-4">
+        <div className="xl:col-span-5 space-y-4 print:hidden">
           {/* Main Mode Tabs */}
           <div className="flex rounded-2xl bg-slate-950/70 p-1 border border-white/10">
             {[
@@ -819,9 +819,9 @@ export default function PortfolioBuilderPage() {
         </div>
 
         {/* Live Preview Frame (7 cols) */}
-        <div className="xl:col-span-7">
-          <div className="sticky top-6 rounded-3xl border border-white/10 bg-slate-900/60 p-4 sm:p-6 backdrop-blur-xl shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="xl:col-span-7 print:block print:w-full print:m-0 print:p-0">
+          <div className="sticky top-6 rounded-3xl border border-white/10 bg-slate-900/60 p-4 sm:p-6 backdrop-blur-xl shadow-2xl print:border-none print:shadow-none print:bg-transparent print:p-0 print:static">
+            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3 print:hidden">
               <div className="flex items-center gap-2">
                 <button onClick={() => setViewport('desktop')} className={`p-1.5 rounded-lg ${viewport === 'desktop' ? 'bg-white/20 text-white' : 'text-slate-400'}`}>
                   <Laptop className="h-4 w-4" />
@@ -837,7 +837,7 @@ export default function PortfolioBuilderPage() {
               <span className="text-xs text-slate-400">Live Preview Theme: <strong className="text-cyan-300 capitalize">{themeId}</strong></span>
             </div>
 
-            <div id="portfolio-print-area" className={`mx-auto overflow-hidden transition-all duration-300 rounded-2xl border border-white/10 ${
+            <div id="portfolio-print-area" className={`mx-auto overflow-hidden transition-all duration-300 rounded-2xl border border-white/10 print:border-none print:w-full print:max-w-none print:rounded-none ${
               viewport === 'mobile' ? 'max-w-sm' : viewport === 'tablet' ? 'max-w-xl' : 'w-full'
             }`}>
               <PortfolioThemeRenderer data={portfolio} themeId={themeId} />

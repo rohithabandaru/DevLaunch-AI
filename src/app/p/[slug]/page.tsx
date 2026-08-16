@@ -1,18 +1,20 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, use } from 'react';
 import { fetchPublicPortfolio } from '@/lib/supabase-portfolios';
 import { supabase } from '@/components/providers/app-provider';
 import { PortfolioData, PortfolioThemeRenderer } from '@/components/portfolio/portfolio-themes';
 
-export default function PublicPortfolioPage({ params }: { params: { slug: string } }) {
+export default function PublicPortfolioPage({ params }: { params: Promise<{ slug: string }> }) {
+  const unwrappedParams = use(params);
+  const slug = unwrappedParams.slug;
   const [data, setData] = useState<PortfolioData | null>(null);
   const [themeId, setThemeId] = useState<string>('glassmorphism');
   const [isLoading, setIsLoading] = useState(true);
   const [isError, setIsError] = useState(false);
 
   useEffect(() => {
-    fetchPublicPortfolio(params.slug)
+    fetchPublicPortfolio(slug)
       .then((res) => {
         if (res && res.data) {
           setData(res.data as unknown as PortfolioData);
@@ -23,7 +25,7 @@ export default function PublicPortfolioPage({ params }: { params: { slug: string
             (async () => {
               try {
                 await supabase.from('portfolio_events').insert({
-                  portfolio_slug: params.slug,
+                  portfolio_slug: slug,
                   event_type: 'view',
                   created_at: new Date().toISOString()
                 });
@@ -43,7 +45,7 @@ export default function PublicPortfolioPage({ params }: { params: { slug: string
       .finally(() => {
         setIsLoading(false);
       });
-  }, [params.slug]);
+  }, [slug]);
 
   if (isLoading) {
     return (

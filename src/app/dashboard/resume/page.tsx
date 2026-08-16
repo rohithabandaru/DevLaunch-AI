@@ -226,9 +226,9 @@ export default function ResumeBuilderPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 print:space-y-0">
       {/* Top Header Banner */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-3xl border border-white/10 bg-slate-950/70 p-6 shadow-2xl backdrop-blur-xl print:hidden">
         <div>
           <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3 py-1 text-xs font-semibold text-violet-300">
             <Sparkles className="h-3.5 w-3.5" /> AI Resume Studio
@@ -257,7 +257,7 @@ export default function ResumeBuilderPage() {
       </div>
 
       {/* ATS Score Indicator */}
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-4 print:hidden">
         <div className="rounded-2xl border border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl flex items-center justify-between">
           <div>
             <p className="text-xs text-slate-400">ATS Score</p>
@@ -285,9 +285,9 @@ export default function ResumeBuilderPage() {
       </div>
 
       {/* Workspace */}
-      <div className="grid gap-6 xl:grid-cols-12">
+      <div className="grid gap-6 xl:grid-cols-12 print:block">
         {/* Form & Controls (5 cols) */}
-        <div className="xl:col-span-5 space-y-6">
+        <div className="xl:col-span-5 space-y-6 print:hidden">
           <div className="flex rounded-2xl bg-slate-950/70 p-1 border border-white/10">
             {[
               { id: 'editor', label: 'Form Editor' },
@@ -766,9 +766,9 @@ export default function ResumeBuilderPage() {
         </div>
 
         {/* Live Resume Preview (7 cols) */}
-        <div className="xl:col-span-7">
-          <div className="sticky top-6 rounded-3xl border border-white/10 bg-slate-900/60 p-4 sm:p-6 backdrop-blur-xl shadow-2xl">
-            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3">
+        <div className="xl:col-span-7 print:w-full">
+          <div className="sticky top-6 rounded-3xl border border-white/10 bg-slate-900/60 p-4 sm:p-6 backdrop-blur-xl shadow-2xl print:border-none print:shadow-none print:bg-transparent print:p-0">
+            <div className="mb-4 flex items-center justify-between border-b border-white/10 pb-3 print:hidden">
               <span className="text-xs font-semibold text-slate-300 flex items-center gap-2">
                 <FileText className="h-4 w-4 text-violet-400" /> Live Resume Preview ({templateId})
               </span>
@@ -777,7 +777,7 @@ export default function ResumeBuilderPage() {
               </span>
             </div>
 
-            <div id="resume-print-area" className="overflow-x-auto">
+            <div id="resume-print-area" className="overflow-x-auto print:overflow-visible print:w-full print:max-w-none">
               <ResumeRenderer data={resume} templateId={templateId} />
             </div>
           </div>
