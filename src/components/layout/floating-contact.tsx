@@ -53,7 +53,7 @@ export function FloatingContact() {
 
         {/* Phone / Call */}
         <a
-          href="tel:+919178400000"
+          href="tel:+917842570368"
           className="group flex items-center gap-3"
         >
           <span className="hidden group-hover:inline-flex items-center rounded-xl bg-slate-900/90 border border-white/10 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-md whitespace-nowrap animate-in fade-in slide-in-from-right-2 duration-200">

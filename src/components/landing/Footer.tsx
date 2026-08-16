@@ -135,6 +135,9 @@ export function Footer() {
               <li>
                 <a href="mailto:rohithaaaaa.62@gmail.com" className="hover:text-white transition-colors">Contact Support</a>
               </li>
+              <li>
+                <a href="tel:+917842570368" className="hover:text-white transition-colors">📞 +91 7842570368</a>
+              </li>
             </ul>
           </div>
         </div>
