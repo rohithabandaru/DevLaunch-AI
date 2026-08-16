@@ -213,33 +213,7 @@ export default function PortfolioBuilderPage() {
   };
 
   const handlePrint = () => {
-    const portfolioEl = document.getElementById('portfolio-print-area');
-    if (!portfolioEl) { window.print(); return; }
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) { window.print(); return; }
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>${portfolio.hero.name} - Portfolio</title>
-        <style>
-          * { margin: 0; padding: 0; box-sizing: border-box; }
-          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #020617; color: white; padding: 0; }
-          @page { margin: 0; size: A4; }
-          @media print {
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          }
-        </style>
-      </head>
-      <body>${portfolioEl.innerHTML}</body>
-      </html>
-    `);
-    printWindow.document.close();
-    printWindow.onload = () => {
-      printWindow.focus();
-      printWindow.print();
-      printWindow.close();
-    };
+    window.print();
   };
 
   return (

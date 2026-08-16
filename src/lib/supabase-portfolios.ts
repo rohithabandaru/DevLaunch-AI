@@ -41,11 +41,15 @@ export const savePortfolio = async (
 ) => {
   if (!supabase) return;
   
-  const { data: existing } = await supabase
+  const { data: existing, error: findError } = await supabase
     .from('portfolios')
     .select('id')
     .eq('user_id', userId)
     .single();
+
+  if (findError && findError.code !== 'PGRST116') {
+    console.error("Error finding portfolio:", findError);
+  }
 
   if (existing) {
     const { error } = await supabase
@@ -58,7 +62,10 @@ export const savePortfolio = async (
         updated_at: new Date().toISOString()
       })
       .eq('id', existing.id);
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Update Error:", error.message || error);
+      throw error;
+    }
   } else {
     const { error } = await supabase
       .from('portfolios')
@@ -69,6 +76,9 @@ export const savePortfolio = async (
         slug,
         is_published: isPublished
       });
-    if (error) throw error;
+    if (error) {
+      console.error("Supabase Insert Error:", error.message || error);
+      throw error;
+    }
   }
 };
