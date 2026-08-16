@@ -1,85 +1,73 @@
-"use client";
+'use client';
 
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import { Loader2 } from "lucide-react";
-import PortfolioSite from "@/components/portfolio/preview/PortfolioSite";
-import {
-  STORAGE_KEY,
-  createSamplePortfolio,
-  normalizePortfolio,
-} from "@/lib/portfolio";
-import type { PortfolioData } from "@/types/portfolio";
+import React, { useState, useEffect } from 'react';
+import { fetchPublicPortfolio } from '@/lib/supabase-portfolios';
+import { supabase } from '@/components/providers/app-provider';
+import { PortfolioData, PortfolioThemeRenderer } from '@/components/portfolio/portfolio-themes';
 
-export default function PublishedPortfolioPage() {
-  const params = useParams<{ slug: string }>();
-  const slug = params?.slug || "preview";
+export default function PublicPortfolioPage({ params }: { params: { slug: string } }) {
   const [data, setData] = useState<PortfolioData | null>(null);
-  const [missing, setMissing] = useState(false);
+  const [themeId, setThemeId] = useState<string>('glassmorphism');
+  const [isLoading, setIsLoading] = useState(true);
+  const [isError, setIsError] = useState(false);
 
   useEffect(() => {
-    try {
-      const published = localStorage.getItem("devlaunch-portfolio-published");
-      if (published) {
-        const parsed = normalizePortfolio(
-          JSON.parse(published) as Partial<PortfolioData>
-        );
-        if (!parsed.slug || parsed.slug === slug || slug === "preview") {
-          setData(parsed);
-          return;
+    fetchPublicPortfolio(params.slug)
+      .then((res) => {
+        if (res && res.data) {
+          setData(res.data as unknown as PortfolioData);
+          setThemeId(res.theme || 'glassmorphism');
+          
+          // Analytics Tracking
+          if (supabase) {
+            (async () => {
+              try {
+                await supabase.from('portfolio_events').insert({
+                  portfolio_slug: params.slug,
+                  event_type: 'view',
+                  created_at: new Date().toISOString()
+                });
+              } catch (e) {
+                console.error(e);
+              }
+            })();
+          }
+        } else {
+          setIsError(true);
         }
-      }
+      })
+      .catch((err) => {
+        console.error(err);
+        setIsError(true);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
+  }, [params.slug]);
 
-      const draft = localStorage.getItem(STORAGE_KEY);
-      if (draft) {
-        const parsed = normalizePortfolio(
-          JSON.parse(draft) as Partial<PortfolioData>
-        );
-        if (!parsed.slug || parsed.slug === slug || slug === "preview") {
-          setData(parsed);
-          return;
-        }
-      }
-
-      // Fallback demo so the route never feels broken
-      const sample = createSamplePortfolio();
-      if (slug === "preview" || slug === sample.slug) {
-        setData(sample);
-      } else {
-        setMissing(true);
-        setData(sample);
-      }
-    } catch {
-      setData(createSamplePortfolio());
-    }
-  }, [slug]);
-
-  if (!data) {
+  if (isLoading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
-        <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-        Loading portfolio…
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">
+        <div className="animate-pulse text-lg font-semibold tracking-widest text-cyan-500">LOADING PORTFOLIO...</div>
+      </div>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-slate-400">
+        <div className="text-center">
+          <h1 className="text-4xl font-bold text-white mb-2">404</h1>
+          <p>Portfolio not found or not published.</p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
-      <div className="sticky top-0 z-40 flex items-center justify-between gap-3 border-b border-slate-200/80 bg-white/90 px-4 py-2 text-xs text-slate-500 backdrop-blur print:hidden">
-        <span>
-          {missing
-            ? `No published draft for “${slug}” — showing sample. Publish from the builder.`
-            : `Preview · /p/${slug}`}
-        </span>
-        <Link
-          href="/portfolio"
-          className="font-semibold text-indigo-600 hover:underline"
-        >
-          Open builder
-        </Link>
-      </div>
-      <PortfolioSite data={data} />
+    <div className="min-h-screen bg-slate-950">
+      <PortfolioThemeRenderer data={data} themeId={themeId} />
     </div>
   );
 }
+

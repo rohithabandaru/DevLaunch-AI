@@ -1,78 +1,64 @@
-"use client";
+'use client';
 
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { useInView } from "@/hooks/useInView";
+import React from 'react';
+import { Sparkles, ArrowRight, Layers, CheckCircle2 } from 'lucide-react';
 
-export default function CTA() {
-  const { ref, isInView } = useInView();
-
+export function CTA() {
   return (
-    <section ref={ref} className="relative overflow-hidden bg-gradient-to-br from-indigo-700 via-indigo-800 to-violet-900 py-28 text-white">
-      {/* Dynamic abstract grid pattern */}
-      <div className="absolute inset-0 bg-grid-white/[0.03] [mask-image:radial-gradient(ellipse_at_center,white,transparent_75%)]" />
+    <section id="get-started" className="py-24 relative overflow-hidden bg-[#0B1020]">
+      {/* Radiant Glowing Energy Orb */}
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[450px] bg-gradient-to-r from-[#6366F1]/30 via-[#8B5CF6]/30 to-[#EC4899]/20 blur-[150px] rounded-full pointer-events-none" />
 
-      {/* Decorative radial glows */}
-      <div className="absolute -top-40 -left-40 h-[400px] w-[400px] rounded-full bg-indigo-500/20 blur-3xl animate-blob-1" />
-      <div className="absolute -bottom-40 -right-40 h-[400px] w-[400px] rounded-full bg-violet-500/20 blur-3xl animate-blob-2" />
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        <div className="glass-card p-6 sm:p-10 md:p-16 rounded-[20px] sm:rounded-[28px] border border-indigo-500/30 shadow-2xl text-center space-y-6 sm:space-y-8 relative overflow-hidden glow-pill">
+          {/* Subtle Grid Accent inside card */}
+          <div className="absolute inset-0 bg-grid-pattern opacity-30 pointer-events-none" />
 
-      {/* Glassmorphic decorative floating shapes */}
-      <div className="absolute top-12 right-[15%] h-12 w-12 rounded-xl bg-white/5 border border-white/10 blur-[1px] rotate-12 animate-float hidden md:block" />
-      <div className="absolute bottom-12 left-[15%] h-16 w-16 rounded-full bg-white/5 border border-white/10 blur-[1px] animate-float-slow hidden md:block" />
+          <div className="relative z-10 max-w-3xl mx-auto space-y-6">
+            <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-indigo-500/20 border border-indigo-500/40 text-xs font-bold text-indigo-300">
+              <Sparkles className="w-4 h-4 text-indigo-300" />
+              <span>Ready for Your Next Career Move?</span>
+            </div>
 
-      <div className="relative mx-auto max-w-4xl px-6 text-center">
-        <h2
-          className={`text-4xl font-extrabold tracking-tight text-white md:text-6xl transition-all duration-700 ${
-            isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-          }`}
-        >
-          Ready to Land Your
-          <br className="sm:hidden" />
-          <span className="bg-gradient-to-r from-indigo-200 via-violet-200 to-white bg-clip-text text-transparent"> Dream Job?</span>
-        </h2>
+            <h2 className="text-4xl sm:text-6xl font-black text-white tracking-tight leading-tight">
+              Launch Your Dream <br />
+              <span className="gradient-text-indigo">Career Today</span>
+            </h2>
 
-        <p
-          className={`mt-6 text-lg md:text-xl text-indigo-100/90 leading-relaxed max-w-2xl mx-auto transition-all duration-700 delay-150 ${
-            isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-          }`}
-        >
-          Join thousands of developers using DevLaunch AI to build resumes,
-          generate portfolios, track applications, and prepare for interviews.
-        </p>
+            <p className="text-gray-300 text-base sm:text-lg max-w-xl mx-auto font-normal">
+              Join over 100,000 developers building standout ATS resumes and portfolio websites with DevLaunch AI.
+            </p>
 
-        <div
-          className={`mt-10 flex flex-col justify-center gap-4 sm:flex-row transition-all duration-700 delay-300 ${
-            isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-          }`}
-        >
-          <Link href="/register">
-            <Button
-              size="lg"
-              className="bg-white text-indigo-700 hover:bg-slate-50 shadow-2xl shadow-indigo-950/40 hover:shadow-indigo-950/60 transition-all duration-300 hover:-translate-y-0.5 px-8 text-base font-bold"
-            >
-              Get Started Free
-            </Button>
-          </Link>
+            {/* Action Buttons */}
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-3 sm:gap-4 pt-4 w-full max-w-md sm:max-w-none mx-auto">
+              <a
+                href="/signup"
+                className="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2.5 px-6 sm:px-9 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base font-bold text-white bg-indigo-600 hover:bg-indigo-500 shadow-2xl shadow-indigo-500/40 hover:shadow-indigo-500/60 hover:-translate-y-0.5 transition-all duration-200"
+              >
+                <span>Get Started</span>
+                <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
+              </a>
 
-          <a href="#features">
-            <Button
-              variant="outline"
-              size="lg"
-              className="border-white/30 text-white hover:bg-white/10 hover:border-white/50 transition-all duration-300 hover:-translate-y-0.5 px-8 text-base"
-            >
-              Learn More
-            </Button>
-          </a>
+              <a
+                href="#templates"
+                className="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base font-semibold text-gray-200 glass-card hover:bg-gray-800/80 hover:text-white border border-white/10 hover:border-indigo-500/30 transition-all duration-200"
+              >
+                <Layers className="w-4 h-4 text-indigo-400 shrink-0" />
+                <span>View Templates</span>
+              </a>
+            </div>
+
+            {/* Micro assurance line */}
+            <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs text-gray-400 font-medium">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> No credit card required
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Setup in &lt; 5 Minutes
+              </span>
+            </div>
+          </div>
         </div>
-
-        {/* Small stats helper */}
-        <p
-          className={`mt-12 text-xs font-semibold uppercase tracking-wider text-indigo-200/60 transition-all duration-700 delay-500 ${
-            isInView ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          No credit card required · Free tier forever
-        </p>
       </div>
     </section>
   );

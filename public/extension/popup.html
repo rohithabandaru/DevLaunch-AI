@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      width: 320px;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0B1020;
+      color: #fff;
+      margin: 0;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .header h2 {
+      font-size: 14px;
+      font-weight: 800;
+      margin: 0;
+      background: linear-gradient(to right, #fff, #a7f3d0);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+    .field {
+      margin-bottom: 8px;
+    }
+    .label {
+      font-size: 10px;
+      color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .value {
+      font-size: 12px;
+      font-weight: 600;
+      color: #e2e8f0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    button {
+      width: 100%;
+      background: #7c3aed;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 10px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #6d28d9;
+    }
+    .status {
+      font-size: 11px;
+      color: #34d399;
+      text-align: center;
+      margin-top: 8px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>DevLaunch AI Job Clipper</h2>
+  </div>
+  <div class="card">
+    <div class="field">
+      <div class="label">Job Title</div>
+      <div class="value" id="title">Loading page info...</div>
+    </div>
+    <div class="field">
+      <div class="label">Company</div>
+      <div class="value" id="company">—</div>
+    </div>
+    <div class="field">
+      <div class="label">Location</div>
+      <div class="value" id="location">—</div>
+    </div>
+  </div>
+  <button id="saveBtn">Save to DevLaunch AI</button>
+  <div class="status" id="statusMsg">✓ Application saved to Job Tracker!</div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

@@ -1,13 +1,10 @@
-import { Suspense } from "react";
-import AuthLayout from "@/components/auth/AuthLayout";
-import LoginForm from "@/components/auth/LoginForm";
+import { AuthShell } from '@/components/auth/auth-shell';
+
+export const metadata = {
+  title: 'Login — DevLaunch AI',
+  description: 'Sign in to your DevLaunch AI dashboard to build resumes, portfolios, and more.',
+};
 
 export default function LoginPage() {
-  return (
-    <AuthLayout title="Welcome Back">
-      <Suspense fallback={<div className="text-sm text-slate-500">Loading...</div>}>
-        <LoginForm />
-      </Suspense>
-    </AuthLayout>
-  );
+  return <AuthShell initialMode="login" />;
 }

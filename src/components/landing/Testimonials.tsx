@@ -1,124 +1,113 @@
-"use client";
+'use client';
 
-import { Star } from "lucide-react";
-import { useInView } from "@/hooks/useInView";
+import React from 'react';
+import { Star, Sparkles, Quote } from 'lucide-react';
 
 const testimonials = [
   {
-    name: "Rahul Sharma",
-    role: "Software Engineer",
-    initials: "RS",
-    color: "bg-indigo-100 text-indigo-700 ring-indigo-200/50",
-    shadowColor: "hover:shadow-indigo-100/80 hover:ring-indigo-300/30",
+    name: 'David K.',
+    role: 'Full-Stack Engineer',
+    company: 'Dev Community Member',
+    rating: 5,
+    avatar: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
     review:
-      "DevLaunch AI helped me create an ATS-friendly resume and I landed my first job within a month.",
+      'DevLaunch AI completely revamped my resume and portfolio layout in under 15 minutes. The bullet optimizer and ATS formatting checks made my application significantly cleaner.',
+    badge: 'Verified Builder',
   },
   {
-    name: "Priya Reddy",
-    role: "Frontend Developer",
-    initials: "PR",
-    color: "bg-emerald-100 text-emerald-700 ring-emerald-200/50",
-    shadowColor: "hover:shadow-emerald-100/80 hover:ring-emerald-300/30",
+    name: 'Elena R.',
+    role: 'Frontend Engineer',
+    company: 'Dev Community Member',
+    rating: 5,
+    avatar: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=150&auto=format&fit=crop&q=80',
     review:
-      "The portfolio builder saved me hours of work. It looks modern, responsive, and extremely professional.",
+      'The portfolio generator is seamless. Custom theme options, instant styling, and live project cards give a professional presentation without hours of custom coding.',
+    badge: 'Verified Builder',
   },
   {
-    name: "Arjun Kumar",
-    role: "Full Stack Developer",
-    initials: "AK",
-    color: "bg-violet-100 text-violet-700 ring-violet-200/50",
-    shadowColor: "hover:shadow-violet-100/80 hover:ring-violet-300/30",
+    name: 'Marcus V.',
+    role: 'Software Engineer',
+    company: 'Dev Community Member',
+    rating: 5,
+    avatar: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
     review:
-      "The AI interview practice gave me massive confidence before my technical and system design rounds.",
-  },
-  {
-    name: "Sneha Patel",
-    role: "Data Scientist",
-    initials: "SP",
-    color: "bg-amber-100 text-amber-700 ring-amber-200/50",
-    shadowColor: "hover:shadow-amber-100/80 hover:ring-amber-300/30",
-    review:
-      "The resume suggestions helped me optimize my keywords for ATS and I started getting multiple callbacks.",
+      'The AI bullet point optimizer is awesome. It took my basic project descriptions and helped turn them into concise, high-impact technical statements.',
+    badge: 'Verified Builder',
   },
 ];
 
-export default function Testimonials() {
-  const { ref, isInView } = useInView();
-
+export function Testimonials() {
   return (
-    <section id="testimonials" className="bg-slate-50 py-24 pattern-section">
-      <div ref={ref} className="mx-auto max-w-7xl px-6">
-        {/* Header */}
-        <div
-          className={`text-center transition-all duration-700 ${
-            isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-          }`}
-        >
-          <span className="inline-block rounded-full bg-indigo-100/80 px-4 py-2 text-sm font-semibold text-indigo-600 ring-1 ring-indigo-200/50">
-            Testimonials
-          </span>
+    <section className="py-24 relative bg-[#0B1020]">
+      {/* Background glow */}
+      <div className="absolute top-1/3 right-1/4 w-96 h-96 bg-purple-600/10 blur-[150px] rounded-full pointer-events-none" />
 
-          <h2 className="mt-6 text-4xl font-extrabold text-slate-900 md:text-5xl">
-            Loved by Developers
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        {/* Section Header */}
+        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-400">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Success Stories</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+            Built for Software Engineers & <br className="hidden sm:inline" />
+            <span className="gradient-text-indigo">Modern Developers</span>
           </h2>
-
-          <p className="mt-4 text-lg text-slate-600">
-            Thousands of students and professionals trust DevLaunch AI.
+          <p className="text-gray-400 text-base sm:text-lg">
+            See how developers build standout resumes and publish live portfolios faster with DevLaunch AI.
           </p>
         </div>
 
-        {/* Testimonials grid */}
-        <div className="mt-16 grid gap-8 md:grid-cols-2 lg:grid-cols-4">
-          {testimonials.map((user, index) => {
-            const delays = ["delay-100", "delay-200", "delay-300", "delay-400"];
+        {/* Testimonials Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {testimonials.map((item, idx) => (
+            <div
+              key={idx}
+              className="glass-card p-8 rounded-[20px] glass-card-hover flex flex-col justify-between relative group"
+            >
+              <Quote className="absolute top-6 right-6 w-10 h-10 text-white/5 group-hover:text-indigo-500/20 transition-colors" />
 
-            return (
-              <div
-                key={user.name}
-                className={`relative rounded-2xl bg-white p-8 shadow-lg ring-1 ring-slate-200/60 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl hover:ring-2 ${user.shadowColor} ${delays[index]} ${
-                  isInView ? "animate-fade-in-up" : "opacity-0"
-                }`}
-              >
-                {/* Large decorative quote mark */}
-                <span className="absolute top-4 right-6 text-7xl font-serif text-slate-100 select-none pointer-events-none">
-                  &ldquo;
-                </span>
-
-                {/* Stars */}
-                <div className="mb-4 flex gap-0.5">
-                  {[1, 2, 3, 4, 5].map((star) => (
-                    <Star
-                      key={star}
-                      className="h-4.5 w-4.5 fill-amber-400 text-amber-400"
-                    />
+              <div>
+                {/* 5-Star Rating Header */}
+                <div className="flex items-center gap-1 mb-6">
+                  {[...Array(item.rating)].map((_, i) => (
+                    <Star key={i} className="w-4 h-4 text-amber-400 fill-amber-400" />
                   ))}
+                  <span className="text-xs font-semibold text-gray-400 ml-2">5.0 Star</span>
                 </div>
 
-                {/* Review */}
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">
-                  &ldquo;{user.review}&rdquo;
+                {/* Review Text */}
+                <p className="text-sm text-gray-300 leading-relaxed italic mb-8">
+                  &quot;{item.review}&quot;
                 </p>
+              </div>
 
-                {/* Author info */}
-                <div className="mt-8 flex items-center gap-3">
-                  <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-black ring-2 ${user.color}`}
-                  >
-                    {user.initials}
-                  </div>
-                  <div>
-                    <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1">
-                      {user.name}
-                      <span className="text-[10px] bg-emerald-50 text-emerald-600 px-1.5 py-0.5 rounded-full ring-1 ring-emerald-200/50">
-                        Verified
-                      </span>
+              {/* User Profile Footer */}
+              <div className="pt-6 border-t border-white/5 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Avatar image */}
+                  <img
+                    src={item.avatar}
+                    alt={item.name}
+                    className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/40 group-hover:border-indigo-400 transition-colors shadow-md"
+                  />
+                  <div className="text-left">
+                    <h3 className="text-sm font-bold text-white group-hover:text-indigo-300 transition-colors">
+                      {item.name}
                     </h3>
-                    <p className="text-xs font-semibold text-slate-400">{user.role}</p>
+                    <p className="text-xs text-gray-400">
+                      {item.role} @ <span className="text-indigo-300 font-semibold">{item.company}</span>
+                    </p>
                   </div>
                 </div>
+
+                {/* Badge */}
+                <span className="text-[10px] font-medium px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hidden sm:inline-block">
+                  {item.badge}
+                </span>
               </div>
-            );
-          })}
+            </div>
+          ))}
         </div>
       </div>
     </section>

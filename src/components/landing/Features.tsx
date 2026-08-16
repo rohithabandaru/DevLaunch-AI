@@ -1,112 +1,137 @@
-"use client";
-
-import { FileText, Globe, Briefcase, Bot } from "lucide-react";
-import { useInView } from "@/hooks/useInView";
-
-const DELAY_CLASSES = ["delay-0", "delay-150", "delay-300", "delay-500"];
+import React from 'react';
+import Link from 'next/link';
+import {
+  Sparkles,
+  Globe,
+  ShieldCheck,
+  FileCheck,
+  Layers,
+  Layout,
+  ArrowUpRight,
+  Kanban,
+} from 'lucide-react';
 
 const features = [
   {
-    title: "Resume Builder",
+    icon: Sparkles,
+    title: 'AI Resume Builder',
     description:
-      "Create ATS-friendly resumes using AI suggestions and professional templates that get past automated screening.",
-    icon: FileText,
-    gradient: "from-indigo-500 to-blue-500",
-    shadowColor: "group-hover:shadow-indigo-200/60",
-    ringColor: "ring-indigo-500/20",
+      'Tailor your resume for any tech job description with real-time AI suggestions, keyword optimization, and metric enhancement.',
+    badge: 'Popular',
+    gradient: 'from-indigo-500 to-purple-500',
+    href: '/dashboard/resume',
   },
   {
-    title: "Portfolio Generator",
+    icon: Kanban,
+    title: 'AI Job Pipeline Tracker',
     description:
-      "Build a professional portfolio website that showcases your best work — SEO-optimized and mobile responsive.",
+      'Manage applications in Kanban & Table views with real-time AI role compatibility scoring, interview prep, and direct cover letter generation.',
+    badge: 'New Feature',
+    gradient: 'from-amber-500 to-violet-500',
+    href: '/dashboard/jobs',
+  },
+  {
     icon: Globe,
-    gradient: "from-violet-500 to-purple-500",
-    shadowColor: "group-hover:shadow-violet-200/60",
-    ringColor: "ring-violet-500/20",
+    title: 'Portfolio Generator',
+    description:
+      'Generate a stunning, mobile-responsive developer portfolio website hosted instantly with 1-click custom domain publishing.',
+    badge: 'Instant Launch',
+    gradient: 'from-purple-500 to-pink-500',
+    href: '/dashboard/portfolio',
   },
   {
-    title: "Job Tracker",
+    icon: ShieldCheck,
+    title: 'ATS Score Checker',
     description:
-      "Track all your job applications across a Kanban board with smart insights, deadlines, and status updates.",
-    icon: Briefcase,
-    gradient: "from-emerald-500 to-teal-500",
-    shadowColor: "group-hover:shadow-emerald-200/60",
-    ringColor: "ring-emerald-500/20",
+      'Scan your resume structure against industry ATS standards to identify missing keywords and eliminate formatting issues.',
+    badge: 'ATS Scanner',
+    gradient: 'from-emerald-500 to-teal-500',
+    href: '/dashboard/ats',
   },
   {
-    title: "AI Interview",
+    icon: FileCheck,
+    title: 'Cover Letter Generator',
     description:
-      "Practice mock interviews with real-time AI feedback, STAR method coaching, and confidence scoring.",
-    icon: Bot,
-    gradient: "from-amber-500 to-orange-500",
-    shadowColor: "group-hover:shadow-amber-200/60",
-    ringColor: "ring-amber-500/20",
+      'Craft personalized, role-specific cover letters in under 30 seconds aligned directly with hiring manager preferences.',
+    badge: 'AI Powered',
+    gradient: 'from-blue-500 to-indigo-500',
+    href: '/dashboard/cover-letter',
+  },
+  {
+    icon: Layout,
+    title: 'Developer Templates',
+    description:
+      'Explore recruiter-approved resume layouts and glassmorphism portfolio themes engineered for software engineers.',
+    badge: '30+ Designs',
+    gradient: 'from-pink-500 to-rose-500',
+    href: '/dashboard/templates',
   },
 ];
 
-export default function Features() {
-  const { ref, isInView } = useInView();
-
+export function Features() {
   return (
-    <section id="features" className="relative py-24 pattern-section">
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-b from-slate-50/80 via-white to-slate-50/80 -z-10" />
+    <section id="features" className="py-24 relative bg-[#0B1020]">
+      {/* Background glow effects */}
+      <div className="absolute top-1/2 left-0 w-96 h-96 bg-indigo-600/10 blur-[140px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-0 right-0 w-96 h-96 bg-purple-600/10 blur-[140px] rounded-full pointer-events-none" />
 
-      <div ref={ref} className="mx-auto max-w-6xl px-6">
-        {/* Section header */}
-        <div
-          className={`text-center transition-all duration-700 ${
-            isInView ? "opacity-100 translate-y-0" : "opacity-0 translate-y-6"
-          }`}
-        >
-          <span className="inline-block rounded-full bg-indigo-100/80 px-4 py-2 text-sm font-semibold text-indigo-600 ring-1 ring-indigo-200/50">
-            Features
-          </span>
-
-          <h2 className="mt-6 text-4xl font-extrabold text-slate-900 md:text-5xl">
-            Everything You Need
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+        {/* Section Header */}
+        <div className="text-center max-w-3xl mx-auto mb-16 space-y-4">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-xs font-semibold text-indigo-400">
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Power Features</span>
+          </div>
+          <h2 className="text-3xl sm:text-5xl font-extrabold text-white tracking-tight">
+            Everything You Need to <br className="hidden sm:inline" />
+            <span className="gradient-text-indigo">Supercharge Your Career</span>
           </h2>
-
-          <p className="mt-4 text-lg text-slate-600 max-w-2xl mx-auto">
-            Powerful AI-driven tools designed to give you an unfair advantage in
-            your job search.
+          <p className="text-gray-400 text-base sm:text-lg">
+            Built specifically for developers, engineers, and tech professionals aiming for top-tier tech roles.
           </p>
         </div>
 
-        {/* Feature cards */}
-        <div className="mt-16 grid gap-6 md:grid-cols-2 lg:grid-cols-4">
-          {features.map((feature, index) => {
-            const Icon = feature.icon;
-
+        {/* 6 Feature Cards Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+          {features.map((feature, idx) => {
+            const IconComponent = feature.icon;
             return (
-              <div
-                key={feature.title}
-                className={`group glass-card rounded-2xl p-8 shadow-md ring-1 ring-slate-200/50 transition-all duration-500 hover:-translate-y-2 hover:shadow-2xl ${feature.shadowColor} ${DELAY_CLASSES[index]} ${
-                  isInView
-                    ? "animate-fade-in-up"
-                    : "opacity-0"
-                }`}
+              <Link
+                key={idx}
+                href={feature.href}
+                className="group relative glass-card p-8 rounded-[20px] glass-card-hover flex flex-col justify-between"
               >
-                {/* Icon container */}
-                <div
-                  className={`mb-6 flex h-14 w-14 items-center justify-center rounded-xl bg-gradient-to-br ${feature.gradient} shadow-lg ring-4 ${feature.ringColor} transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3`}
-                >
-                  <Icon className="h-7 w-7 text-white" />
+                <div>
+                  {/* Icon & Badge Header */}
+                  <div className="flex items-center justify-between mb-6">
+                    <div
+                      className={`w-14 h-14 rounded-2xl bg-gradient-to-br ${feature.gradient} p-0.5 shadow-lg shadow-indigo-500/20 group-hover:scale-110 transition-transform duration-300`}
+                    >
+                      <div className="w-full h-full bg-[#111827] rounded-[14px] flex items-center justify-center">
+                        <IconComponent className="w-7 h-7 text-white" />
+                      </div>
+                    </div>
+
+                    <span className="text-[11px] font-semibold px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-gray-300 group-hover:border-indigo-500/30 group-hover:text-indigo-300 transition-colors">
+                      {feature.badge}
+                    </span>
+                  </div>
+
+                  {/* Card Content */}
+                  <h3 className="text-xl font-bold text-white mb-3 tracking-tight group-hover:text-indigo-300 transition-colors">
+                    {feature.title}
+                  </h3>
+                  <p className="text-sm text-gray-400 leading-relaxed">
+                    {feature.description}
+                  </p>
                 </div>
 
-                <h3 className="mb-3 text-xl font-bold text-slate-900">
-                  {feature.title}
-                </h3>
-
-                <p className="text-slate-600 leading-relaxed text-sm">
-                  {feature.description}
-                </p>
-
-                {/* Hover arrow indicator */}
-                <div className="mt-6 flex items-center gap-1 text-sm font-semibold text-indigo-600 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-x-0 group-hover:translate-x-1">
-                  Learn more →
+                {/* Subtle Interactive Footer Link */}
+                <div className="mt-6 pt-4 border-t border-white/5 flex items-center text-xs font-semibold text-indigo-400 group-hover:text-indigo-300 gap-1">
+                  <span>Open {feature.title}</span>
+                  <ArrowUpRight className="w-4 h-4 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
                 </div>
-              </div>
+              </Link>
             );
           })}
         </div>

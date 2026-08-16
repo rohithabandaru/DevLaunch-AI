@@ -1,44 +1,35 @@
-import type { Metadata } from "next";
-import { Inter } from "next/font/google";
-import { AuthProvider } from "@/providers/AuthProvider";
-import "./globals.css";
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
+import './globals.css';
+import { AppProviders } from '@/components/providers/app-provider';
+import { FloatingContact } from '@/components/layout/floating-contact';
 
 const inter = Inter({
-  variable: "--font-sans",
-  subsets: ["latin"],
+  subsets: ['latin'],
+  variable: '--font-inter',
+  display: 'swap',
 });
 
 export const metadata: Metadata = {
-  title: "DevLaunch AI — Build Resumes, Portfolios & Ace Interviews",
+  title: 'DevLaunch AI - Build Your Resume & Portfolio with AI',
   description:
-    "Build ATS-friendly resumes, generate stunning portfolios, track job applications, and practice interviews with AI — all in one platform.",
+    'Create ATS-friendly resumes, beautiful developer portfolios, and launch your career faster with AI-powered tools.',
   keywords: [
-    "resume builder",
-    "job tracker",
-    "AI interview",
-    "portfolio builder",
-    "ATS resume",
-    "career tools",
+    'AI Resume Builder',
+    'Developer Portfolio Generator',
+    'ATS Resume Checker',
+    'Software Engineer Resume',
+    'DevLaunch AI',
   ],
-  authors: [{ name: "DevLaunch AI" }],
+  authors: [{ name: 'DevLaunch AI Team' }],
   openGraph: {
-    title: "DevLaunch AI — Build Resumes, Portfolios & Ace Interviews",
+    title: 'DevLaunch AI - Build Your Resume & Portfolio with AI',
     description:
-      "Build ATS-friendly resumes, generate stunning portfolios, track job applications, and practice interviews with AI.",
-    url: "https://devlaunch.ai",
-    siteName: "DevLaunch AI",
-    type: "website",
-    locale: "en_IN",
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "DevLaunch AI — Build Resumes, Portfolios & Ace Interviews",
-    description:
-      "Build ATS-friendly resumes, generate stunning portfolios, track job applications, and practice interviews with AI.",
-  },
-  robots: {
-    index: true,
-    follow: true,
+      'Create ATS-friendly resumes, beautiful developer portfolios, and launch your career faster with AI-powered tools.',
+    url: 'https://devlaunch.ai',
+    siteName: 'DevLaunch AI',
+    locale: 'en_US',
+    type: 'website',
   },
 };
 
@@ -48,9 +39,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} h-full antialiased`}>
-      <body className="min-h-full flex flex-col font-sans">
-        <AuthProvider>{children}</AuthProvider>
+    <html lang="en" className={`${inter.variable} dark scroll-smooth`}>
+      <body className="bg-[#0B1020] text-white antialiased selection:bg-[#6366F1] selection:text-white">
+        <AppProviders>
+          {children}
+          <FloatingContact />
+        </AppProviders>
       </body>
     </html>
   );

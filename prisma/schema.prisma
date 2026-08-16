@@ -1,0 +1,154 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String?
+  name          String?
+  avatar        String?
+  bio           String?
+  targetRole    String?        @default("Full Stack Developer")
+  role          Role           @default(USER)
+  plan          Plan           @default(FREE)
+  website       String?
+  github        String?
+  linkedin      String?
+  twitter       String?
+  notifications Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  resumes       Resume[]
+  portfolios    Portfolio[]
+  coverLetters  CoverLetter[]
+  atsReports    ATSReport[]
+  settings      Settings?
+  feedback      Feedback[]
+}
+
+model Resume {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String   @default("My Resume")
+  templateId  String   @default("modern")
+  content     Json
+  score       Int      @default(85)
+  isPublic    Boolean  @default(false)
+  slug        String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Portfolio {
+  id           String    @id @default(uuid())
+  userId       String
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title        String    @default("My Developer Portfolio")
+  slug         String    @unique
+  theme        String    @default("developer-dark")
+  data         Json
+  isPublished  Boolean   @default(false)
+  views        Int       @default(0)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  projects     Project[]
+}
+
+model Project {
+  id          String    @id @default(uuid())
+  portfolioId String
+  portfolio   Portfolio @relation(fields: [portfolioId], references: [id], onDelete: Cascade)
+  title       String
+  description String
+  techStack   String[]
+  githubUrl   String?
+  liveUrl     String?
+  imageUrl    String?
+  videoUrl    String?
+  category    String?
+  featured    Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+}
+
+model Template {
+  id          String   @id @default(uuid())
+  name        String
+  category    String   // "resume" or "portfolio"
+  style       String
+  description String
+  previewUrl  String?
+  isPremium   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+}
+
+model CoverLetter {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobTitle       String
+  company        String
+  jobDescription String
+  tone           String   @default("Professional")
+  length         String   @default("Medium")
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+model ATSReport {
+  id             String   @id @default(uuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resumeTitle    String
+  overallScore   Int
+  keywordMatch   Int
+  formatting     String
+  skillsMatch    String
+  readability    String
+  suggestions    String[]
+  missingKeywords String[]
+  createdAt      DateTime @default(now())
+}
+
+model Settings {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  user               User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme              String   @default("dark")
+  language           String   @default("en")
+  emailNotifications Boolean  @default(true)
+  publicProfile      Boolean  @default(true)
+  updatedAt          DateTime @updatedAt
+}
+
+model Feedback {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject   String
+  message   String
+  rating    Int      @default(5)
+  status    String   @default("pending") // pending, reviewed, resolved
+  createdAt DateTime @default(now())
+}

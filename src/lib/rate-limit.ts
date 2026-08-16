@@ -1,49 +1,24 @@
-/**
- * Simple in-memory rate limiter (per process).
- * For multi-instance production, swap for Redis / Upstash.
- */
+import { type NextRequest, NextResponse } from 'next/server';
 
-type Bucket = { count: number; resetAt: number };
+const ipCache = new Map<string, { count: number; expires: number }>();
 
-const buckets = new Map<string, Bucket>();
-
-export type RateLimitResult = {
-  allowed: boolean;
-  remaining: number;
-  resetAt: number;
-};
-
-export function rateLimit(
-  key: string,
-  limit: number,
-  windowMs: number
-): RateLimitResult {
+export function rateLimit(req: NextRequest, limit = 60, windowMs = 60 * 1000) {
+  const ip = req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || '127.0.0.1';
   const now = Date.now();
-  const existing = buckets.get(key);
+  const record = ipCache.get(ip);
 
-  if (!existing || existing.resetAt <= now) {
-    const resetAt = now + windowMs;
-    buckets.set(key, { count: 1, resetAt });
-    return { allowed: true, remaining: limit - 1, resetAt };
+  if (!record || now > record.expires) {
+    ipCache.set(ip, { count: 1, expires: now + windowMs });
+    return null;
   }
 
-  if (existing.count >= limit) {
-    return { allowed: false, remaining: 0, resetAt: existing.resetAt };
+  record.count += 1;
+  if (record.count > limit) {
+    return NextResponse.json(
+      { error: 'Too many requests. Please try again later.' },
+      { status: 429 }
+    );
   }
 
-  existing.count += 1;
-  buckets.set(key, existing);
-  return {
-    allowed: true,
-    remaining: limit - existing.count,
-    resetAt: existing.resetAt,
-  };
-}
-
-/** Best-effort cleanup so the map does not grow forever in long-lived processes. */
-export function pruneRateLimits() {
-  const now = Date.now();
-  for (const [key, bucket] of buckets) {
-    if (bucket.resetAt <= now) buckets.delete(key);
-  }
+  return null;
 }
