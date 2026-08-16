@@ -3,9 +3,9 @@
 import { useState } from 'react';
 import { MessageCircle, Mail, X, Phone } from 'lucide-react';
 
-const WHATSAPP_NUMBER = '919178400000'; // Replace with your actual number
+const WHATSAPP_NUMBER = '917842570368';
 const WHATSAPP_MESSAGE = encodeURIComponent('Hi! I have a question about DevLaunch AI.');
-const EMAIL_ADDRESS = 'support@devlaunch.ai';
+const EMAIL_ADDRESS = 'rohithaaaaa.62@gmail.com';
 const EMAIL_SUBJECT = encodeURIComponent('DevLaunch AI — Support Request');
 
 export function FloatingContact() {

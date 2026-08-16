@@ -234,7 +234,7 @@ export function Pricing() {
 
                 {/* CTA Button */}
                 <a
-                  href={plan.name === 'Enterprise' ? 'mailto:sales@devlaunch.ai' : '/signup'}
+                  href={plan.name === 'Enterprise' ? 'mailto:rohithaaaaa.62@gmail.com' : '/signup'}
                   className={`w-full min-h-[48px] inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl text-sm font-bold transition-all duration-200 hover:-translate-y-0.5 ${plan.ctaStyle}`}
                 >
                   <span>{plan.ctaText}</span>
@@ -253,7 +253,7 @@ export function Pricing() {
           <p className="text-xs text-gray-500">
             Questions?{' '}
             <a
-              href="mailto:support@devlaunch.ai"
+              href="mailto:rohithaaaaa.62@gmail.com"
               className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2"
             >
               Talk to our team

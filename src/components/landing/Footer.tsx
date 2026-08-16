@@ -133,7 +133,7 @@ export function Footer() {
                 <a href="#security" className="hover:text-white transition-colors">Security & Trust</a>
               </li>
               <li>
-                <a href="mailto:support@devlaunch.ai" className="hover:text-white transition-colors">Contact Support</a>
+                <a href="mailto:rohithaaaaa.62@gmail.com" className="hover:text-white transition-colors">Contact Support</a>
               </li>
             </ul>
           </div>
