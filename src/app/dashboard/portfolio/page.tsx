@@ -212,6 +212,36 @@ export default function PortfolioBuilderPage() {
     await handleSaveToCloud(true);
   };
 
+  const handlePrint = () => {
+    const portfolioEl = document.getElementById('portfolio-print-area');
+    if (!portfolioEl) { window.print(); return; }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) { window.print(); return; }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${portfolio.hero.name} - Portfolio</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #020617; color: white; padding: 0; }
+          @page { margin: 0; size: A4; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>${portfolioEl.innerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    };
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Banner */}
@@ -228,7 +258,7 @@ export default function PortfolioBuilderPage() {
           <Button onClick={() => handleSaveToCloud(isPublished)} disabled={isSaving} className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 text-xs hover:bg-emerald-500/20 text-emerald-300">
             {isSaving ? 'Saving...' : 'Save to Cloud'}
           </Button>
-          <Button onClick={() => window.print()} className="rounded-xl border border-white/10 bg-white/10 text-xs hover:bg-white/20">
+          <Button onClick={handlePrint} className="rounded-xl border border-white/10 bg-white/10 text-xs hover:bg-white/20">
             Export PDF / Print
           </Button>
           <Button onClick={() => {
@@ -833,7 +863,7 @@ export default function PortfolioBuilderPage() {
               <span className="text-xs text-slate-400">Live Preview Theme: <strong className="text-cyan-300 capitalize">{themeId}</strong></span>
             </div>
 
-            <div className={`mx-auto overflow-hidden transition-all duration-300 rounded-2xl border border-white/10 ${
+            <div id="portfolio-print-area" className={`mx-auto overflow-hidden transition-all duration-300 rounded-2xl border border-white/10 ${
               viewport === 'mobile' ? 'max-w-sm' : viewport === 'tablet' ? 'max-w-xl' : 'w-full'
             }`}>
               <PortfolioThemeRenderer data={portfolio} themeId={themeId} />

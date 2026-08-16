@@ -215,7 +215,33 @@ export default function ResumeBuilderPage() {
   }
 
   const handlePrint = () => {
-    window.print();
+    const resumeEl = document.getElementById('resume-print-area');
+    if (!resumeEl) { window.print(); return; }
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) { window.print(); return; }
+    printWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>${resume.personalInfo.fullName} - Resume</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: white; color: black; padding: 0.4in; }
+          @page { margin: 0; size: A4; }
+          @media print {
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          }
+        </style>
+      </head>
+      <body>${resumeEl.innerHTML}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.onload = () => {
+      printWindow.focus();
+      printWindow.print();
+      printWindow.close();
+    };
   };
 
   const handleDuplicate = () => {
@@ -777,7 +803,7 @@ export default function ResumeBuilderPage() {
               </span>
             </div>
 
-            <div className="overflow-x-auto">
+            <div id="resume-print-area" className="overflow-x-auto">
               <ResumeRenderer data={resume} templateId={templateId} />
             </div>
           </div>
