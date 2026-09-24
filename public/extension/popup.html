@@ -30,7 +30,7 @@
       border: 1px solid rgba(255, 255, 255, 0.1);
       border-radius: 12px;
       padding: 12px;
-      margin-bottom: 16px;
+      margin-bottom: 12px;
     }
     .field {
       margin-bottom: 8px;
@@ -59,9 +59,21 @@
       font-weight: 700;
       cursor: pointer;
       transition: background 0.2s;
+      margin-bottom: 8px;
     }
     button:hover {
       background: #6d28d9;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    button.secondary {
+      background: rgba(255, 255, 255, 0.08);
+      color: #e2e8f0;
+    }
+    button.secondary:hover {
+      background: rgba(255, 255, 255, 0.14);
     }
     .status {
       font-size: 11px;
@@ -70,12 +82,22 @@
       margin-top: 8px;
       display: none;
     }
+    .status.error {
+      color: #f87171;
+    }
+    .authStatus {
+      font-size: 10px;
+      color: #94a3b8;
+      text-align: center;
+      margin-bottom: 8px;
+    }
   </style>
 </head>
 <body>
   <div class="header">
     <h2>DevLaunch AI Job Clipper</h2>
   </div>
+  <div class="authStatus" id="authStatus">Not connected</div>
   <div class="card">
     <div class="field">
       <div class="label">Job Title</div>
@@ -90,9 +112,11 @@
       <div class="value" id="location">—</div>
     </div>
   </div>
+  <button id="connectBtn" class="secondary">Connect to DevLaunch AI</button>
   <button id="saveBtn">Save to DevLaunch AI</button>
-  <div class="status" id="statusMsg">✓ Application saved to Job Tracker!</div>
+  <div class="status" id="statusMsg"></div>
 
+  <script src="config.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

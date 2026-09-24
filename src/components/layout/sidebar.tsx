@@ -2,10 +2,9 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, Briefcase, BarChart3, Wand2, Layout, User, Settings, ShieldCheck, Sparkles, LogOut, Kanban, Sun, Moon } from 'lucide-react';
+import { LayoutDashboard, FileText, Briefcase, BarChart3, Wand2, Layout, User, Settings, ShieldCheck, Sparkles, LogOut, Kanban, Sun, Moon, CreditCard } from 'lucide-react';
 import { useAuth, useTheme } from '@/components/providers/app-provider';
-import { useState, useEffect } from 'react';
-import { Button } from '@/components/ui/button';
+import React from 'react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -15,19 +14,20 @@ const navItems = [
   { href: '/dashboard/ats', label: 'ATS Checker', icon: BarChart3 },
   { href: '/dashboard/cover-letter', label: 'Cover Letter', icon: Wand2 },
   { href: '/dashboard/templates', label: 'Templates', icon: Layout },
+  { href: '/dashboard/billing', label: 'Billing & Plans', icon: CreditCard },
   { href: '/dashboard/profile', label: 'Profile', icon: User },
   { href: '/dashboard/settings', label: 'Settings', icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { user, logout, toggleAdminRole } = useAuth();
+  const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-white/10 bg-slate-950/90 p-4 backdrop-blur-xl text-slate-100 selection:bg-violet-500/30">
@@ -85,11 +85,11 @@ export function Sidebar() {
       <div className="border-t border-white/10 pt-4 space-y-3">
         <div className="flex items-center gap-3 px-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 font-bold text-violet-300 text-xs border border-violet-500/30">
-            {user?.name?.slice(0, 2).toUpperCase() || 'AM'}
+            {user?.name ? user.name.slice(0, 2).toUpperCase() : '…'}
           </div>
           <div className="flex-1 overflow-hidden">
-            <div className="truncate text-xs font-semibold text-white">{user?.name || 'Alex Morgan'}</div>
-            <div className="truncate text-[10px] text-slate-400">{user?.email || 'demo@devlaunch.ai'}</div>
+            <div className="truncate text-xs font-semibold text-white">{user?.name || 'Loading…'}</div>
+            <div className="truncate text-[10px] text-slate-400">{user ? user.email : 'Restoring session…'}</div>
           </div>
         </div>
 
@@ -111,13 +111,9 @@ export function Sidebar() {
               )}
             </button>
 
-            <button
-              onClick={toggleAdminRole}
-              className="text-[10px] text-slate-400 hover:text-slate-200 underline"
-              title="Toggle Admin role mode for testing"
-            >
-              Role: {user?.role || 'admin'}
-            </button>
+            <span className="text-[10px] text-slate-400">
+              Role: {user?.role || 'user'}
+            </span>
           </div>
 
           <button

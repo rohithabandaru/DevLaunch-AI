@@ -2,9 +2,8 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { ArrowRight, BarChart3, Briefcase, FileText, Sparkles, Wand2, ShieldCheck, Eye, Download, Activity, ExternalLink, Kanban } from 'lucide-react';
+import { ArrowRight, BarChart3, Briefcase, FileText, Sparkles, Activity, Kanban } from 'lucide-react';
 import { useAuth } from '@/components/providers/app-provider';
-import { Button } from '@/components/ui/button';
 import { TEMPLATE_LIST } from '@/components/resume/resume-templates';
 import { PORTFOLIO_THEMES } from '@/components/portfolio/portfolio-themes';
 

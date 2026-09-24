@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Rocket, Code2, Globe, MessageSquare, Heart } from 'lucide-react';
+import { Rocket, MessageSquare, Heart } from 'lucide-react';
 
 export function Footer() {
   return (

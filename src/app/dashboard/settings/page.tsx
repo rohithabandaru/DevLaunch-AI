@@ -1,23 +1,23 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Moon, Sun, Globe, Bell, Shield, Sparkles, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { Settings as SettingsIcon, Moon, Sun, Globe, Bell, Shield, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useTheme } from '@/components/providers/app-provider';
 import { PORTFOLIO_THEMES } from '@/components/portfolio/portfolio-themes';
 
 export default function SettingsPage() {
   const { theme, toggleTheme } = useTheme();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   const [language, setLanguage] = useState('English');
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [publicSearchable, setPublicSearchable] = useState(true);
-  const [plan, setPlan] = useState<'free' | 'pro'>('pro');
+  const [plan] = useState<'free' | 'pro'>('pro');
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
 
   return (

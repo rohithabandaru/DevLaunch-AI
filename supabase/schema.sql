@@ -143,16 +143,63 @@ CREATE POLICY "Users can delete their own documents"
 
 CREATE INDEX IF NOT EXISTS idx_documents_user ON public.documents(user_id);
 
--- 5. TRIGGER FOR USER SIGN UP
--- Automatically create profile row when new user signs up in Supabase Auth
+-- 5. AUTHORITATIVE USER ROLES (server-controlled; users can never promote themselves)
+CREATE TABLE IF NOT EXISTS public.user_roles (
+    user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
+    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+ALTER TABLE public.user_roles ENABLE ROW LEVEL SECURITY;
+
+-- Owners may read their own role. No INSERT/UPDATE/DELETE policies exist, so API
+-- clients cannot create or modify role rows (self-promotion is impossible).
+CREATE POLICY "user_roles owner select"
+    ON public.user_roles FOR SELECT
+    USING (auth.uid() = user_id);
+
+-- 6. EXTENSION SESSIONS (short-lived, single-use, hashed tokens for the extension)
+CREATE TABLE IF NOT EXISTS public.extension_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    token_hash TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT timezone('utc'::text, now()),
+    expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
+    used_at TIMESTAMP WITH TIME ZONE
+);
+
+ALTER TABLE public.extension_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "extension_sessions owner select"
+    ON public.extension_sessions FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "extension_sessions owner delete"
+    ON public.extension_sessions FOR DELETE
+    USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_extension_sessions_token_hash
+    ON public.extension_sessions (token_hash);
+
+CREATE INDEX IF NOT EXISTS idx_extension_sessions_user
+    ON public.extension_sessions (user_id);
+
+-- 7. TRIGGER FOR USER SIGN UP
+-- Automatically create profile + authoritative role row when a new user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
     INSERT INTO public.profiles (id, full_name, target_role)
-    VALUES (new.id, new.raw_user_meta_data->>'full_name', 'Full Stack Developer');
+    VALUES (new.id, new.raw_user_meta_data->>'full_name', 'Full Stack Developer')
+    ON CONFLICT (id) DO NOTHING;
+
+    INSERT INTO public.user_roles (user_id, role)
+    VALUES (new.id, 'user')
+    ON CONFLICT (user_id) DO NOTHING;
+
     RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 CREATE OR REPLACE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users

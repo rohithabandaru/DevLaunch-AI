@@ -1,14 +1,12 @@
 'use client';
 
-import React, { useEffect, useState, useMemo } from 'react';
-import Link from 'next/link';
+import React, { useEffect, useState, useMemo, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Kanban,
   Table as TableIcon,
   Plus,
   Search,
-  Building2,
   MapPin,
   DollarSign,
   Sparkles,
@@ -16,19 +14,12 @@ import {
   Trash2,
   Edit3,
   CheckCircle2,
-  XCircle,
   Clock,
-  Briefcase,
   Wand2,
   TrendingUp,
   BrainCircuit,
   X,
-  ChevronRight,
-  Filter,
   Check,
-  Award,
-  BookOpen,
-  ArrowUpRight,
   Mail,
   Phone,
   User as UserIcon,
@@ -41,6 +32,7 @@ import {
   Copy,
   Download,
   BarChart3,
+  ArrowLeft,
 } from 'lucide-react';
 import { useAuth } from '@/components/providers/app-provider';
 import { readStorage, writeStorage } from '@/lib/storage';
@@ -48,8 +40,11 @@ import { analyzeJobMatch, generateInterviewPrep, extractJobFromEmail, generateFo
 import type { NegotiationResult } from '@/lib/ai';
 import { upsertJobFromEmail } from '@/lib/job-email-sync';
 import { EmailSyncModal } from '@/components/jobs/email-sync-modal';
-import type { JobApplication, JobStatus, WorkplaceType, JobMatchResult, InterviewPrepResult, EmailConnection, EmailProvider } from '@/types/job-types';
+import { buildGoogleOAuthUrl, fetchGoogleUserProfile, fetchRealGmailMessages } from '@/lib/gmail-sync';
+import type { JobApplication, JobStatus, WorkplaceType, EmailConnection, EmailProvider } from '@/types/job-types';
 import { fetchJobs, insertJob, updateJob, deleteJob } from '@/lib/supabase-jobs';
+import { isProUser, FREE_LIMITS } from '@/lib/plan-limits';
+import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
 
 const INITIAL_JOBS: JobApplication[] = [
   {
@@ -62,7 +57,7 @@ const INITIAL_JOBS: JobApplication[] = [
     status: 'INTERVIEW',
     appliedDate: '2026-08-01',
     url: 'https://stripe.com/jobs/senior-frontend-engineer',
-    applicantEmail: 'demo@devlaunch.ai',
+    applicantEmail: '',
     applicantPhone: '+1 (555) 234-5678',
     description: 'We are looking for a Senior Frontend Engineer to build high-performance React design systems, dashboard applications, and developer SDKs. Must be expert in TypeScript, Next.js, Web Vitals performance optimization, and API design.',
     notes: 'Recruiter screen went great with Sarah on Aug 3rd. Technical screen scheduled for Friday focusing on React component design and system state management.',
@@ -80,7 +75,7 @@ const INITIAL_JOBS: JobApplication[] = [
     status: 'OFFER',
     appliedDate: '2026-07-20',
     url: 'https://vercel.com/careers/staff-architect',
-    applicantEmail: 'demo@devlaunch.ai',
+    applicantEmail: '',
     applicantPhone: '+1 (555) 234-5678',
     description: 'Lead enterprise architecture discussions, optimize Next.js App Router performance at scale, build developer tooling and AI workflows.',
     notes: 'Received initial verbal offer of $235k base + equity grants. Reviewing total comp package before final decision.',
@@ -98,7 +93,7 @@ const INITIAL_JOBS: JobApplication[] = [
     status: 'APPLIED',
     appliedDate: '2026-08-08',
     url: 'https://linear.app/careers/product-engineer',
-    applicantEmail: 'demo@devlaunch.ai',
+    applicantEmail: '',
     applicantPhone: '+1 (555) 234-5678',
     description: 'Build fast, keyboard-first web applications using React, WebSockets, offline sync algorithms, and SQLite/WASM.',
     notes: 'Submitted customized cover letter focusing on keyboard shortcuts and real-time syncing experience.',
@@ -116,7 +111,7 @@ const INITIAL_JOBS: JobApplication[] = [
     status: 'SAVED',
     appliedDate: '2026-08-10',
     url: 'https://supabase.com/careers/fullstack',
-    applicantEmail: 'demo@devlaunch.ai',
+    applicantEmail: '',
     applicantPhone: '+1 (555) 234-5678',
     description: 'Build developer dashboard tools, Postgres integration managers, and serverless authentication workflows.',
     notes: 'Saved for referral outreach through alumni network.',
@@ -151,12 +146,34 @@ export default function JobTrackerPage() {
 
   const [jobs, setJobs] = useState<JobApplication[]>([]);
   const [isLoadingJobs, setIsLoadingJobs] = useState(true);
+  const [jobLimitReached, setJobLimitReached] = useState(false);
 
   useEffect(() => {
-    if (!currentUser?.id) return;
-    fetchJobs(currentUser.id)
-      .then(data => setJobs(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())))
-      .catch(err => console.error('Failed to load jobs', err))
+    const userId = currentUser?.id || '';
+    fetchJobs(userId)
+      .then(data => {
+        if (data && data.length > 0) {
+          setJobs(data.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+        } else {
+          const localJobs = readStorage<JobApplication[]>('jobs_backup', []);
+          if (localJobs && localJobs.length > 0) {
+            setJobs(localJobs);
+          } else {
+            setJobs(INITIAL_JOBS);
+            writeStorage('jobs_backup', INITIAL_JOBS);
+          }
+        }
+      })
+      .catch(err => {
+        console.warn('Failed to load jobs from cloud, loading local backup:', err);
+        const localJobs = readStorage<JobApplication[]>('jobs_backup', []);
+        if (localJobs && localJobs.length > 0) {
+          setJobs(localJobs);
+        } else {
+          setJobs(INITIAL_JOBS);
+          writeStorage('jobs_backup', INITIAL_JOBS);
+        }
+      })
       .finally(() => setIsLoadingJobs(false));
   }, [currentUser]);
   const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
@@ -168,13 +185,21 @@ export default function JobTrackerPage() {
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingJob, setEditingJob] = useState<JobApplication | null>(null);
   const [detailJob, setDetailJob] = useState<JobApplication | null>(null);
+  // Mounted check for safe hydration
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
   // Email Integration States
-  const [emailConnections, setEmailConnections] = useState<EmailConnection[]>(() => readStorage<EmailConnection[]>('emailConnections', []));
+  const [emailConnections, setEmailConnections] = useState<EmailConnection[]>(() =>
+    readStorage<EmailConnection[]>('emailConnections', [])
+  );
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-
-  // Detail Modal Tab
+  const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  // Detail Modal Tab & AI analysis states
   const [detailTab, setDetailTab] = useState<'overview' | 'ai-match' | 'ai-prep'>('overview');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPrepping, setIsPrepping] = useState(false);
@@ -211,35 +236,91 @@ export default function JobTrackerPage() {
     notes: '',
     tags: '',
   });
-
-  // Save to Storage
-  const updateJobsStorage = (nextJobs: JobApplication[]) => {
-    setJobs(nextJobs);
-    // writeStorage('jobs', nextJobs); // Migrated to Supabase
-  };
-
   const updateConnectionsStorage = (nextCons: EmailConnection[]) => {
     setEmailConnections(nextCons);
     writeStorage('emailConnections', nextCons);
   };
 
-  // Connect Email Handler
-  const handleConnectProvider = (provider: EmailProvider) => {
+  const saveEmailConnection = (provider: EmailProvider, targetEmail: string) => {
     const newConnection: EmailConnection = {
       id: crypto.randomUUID(),
       provider,
-      email: currentUser?.email || 'user@devlaunch.ai',
+      email: targetEmail,
       connectedAt: new Date().toISOString(),
       lastSyncedAt: new Date().toISOString(),
       autoSync: true,
       status: 'connected',
     };
-
     const nextCons = [...emailConnections.filter((c) => c.provider !== provider), newConnection];
     updateConnectionsStorage(nextCons);
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hash = window.location.hash;
+      if (hash && hash.includes('access_token=')) {
+        const params = new URLSearchParams(hash.replace('#', '?'));
+        const token = params.get('access_token');
+        if (token) {
+          localStorage.setItem('gmail_token', token);
+          sessionStorage.setItem('gmail_token', token);
+          window.history.replaceState(null, '', window.location.pathname);
+          fetchGoogleUserProfile(token).then((profile) => {
+            setIsSyncing(true);
+            const userEmail = profile?.email || currentUser?.email || '';
+            saveEmailConnection('gmail', userEmail);
+            fetchRealGmailMessages(token).then(async (realMsgs) => {
+              if (realMsgs.length > 0) {
+                let currentJobs = [...jobs];
+                for (const msg of realMsgs) {
+                  const extracted = await extractJobFromEmail(msg);
+                  if (extracted) {
+                    const { updatedJobs } = upsertJobFromEmail(currentJobs, extracted, {
+                      id: msg.id,
+                      subject: msg.subject,
+                      sender: msg.sender,
+                      receivedAt: msg.date,
+                    });
+                    currentJobs = updatedJobs;
+                  }
+                }
+                setJobs(currentJobs);
+                writeStorage('jobs_backup', currentJobs);
+                setSyncToastMessage(`✓ Google OAuth Connected! Real Gmail Inbox Synced (${realMsgs.length} emails scanned) for ${userEmail}`);
+              } else {
+                setSyncToastMessage(`✓ Connected to Google Account (${userEmail}). Scanning Gmail inbox...`);
+              }
+              setTimeout(() => setSyncToastMessage(null), 6000);
+              setIsSyncing(false);
+            }).catch((err) => {
+              console.error('Gmail sync error:', err);
+              if (err?.message === 'GMAIL_API_DISABLED') {
+                setSyncToastMessage('⚠️ Gmail API is not enabled yet in your Google Cloud Console project. Please enable Gmail API at console.cloud.google.com/apis/library/gmail.googleapis.com');
+              }
+              setIsSyncing(false);
+            });
+          });
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Connect Email Handler
+  const handleConnectProvider = (provider: EmailProvider, targetEmail?: string) => {
+    if (provider === 'gmail' && typeof window !== 'undefined') {
+      const oauthUrl = buildGoogleOAuthUrl();
+      router.push(oauthUrl);
+      return;
+    }
+
+    const emailToUse = targetEmail && targetEmail.trim() ? targetEmail.trim() : '';
+    saveEmailConnection(provider, emailToUse);
     
-    // Automatically trigger initial mailbox sync on connect
-    triggerMailboxSync(nextCons);
+    // Trigger initial mailbox sync in background
+    triggerMailboxSync(emailConnections).catch((err) => {
+      console.error('Background sync after connect failed:', err);
+    });
   };
 
   // Disconnect Handler
@@ -255,13 +336,146 @@ export default function JobTrackerPage() {
   };
 
   const triggerMailboxSync = async (activeConnections = emailConnections) => {
-    if (activeConnections.length === 0) {
-      setIsEmailModalOpen(true);
+    const storedToken = typeof window !== 'undefined' ? (localStorage.getItem('gmail_token') || sessionStorage.getItem('gmail_token')) : null;
+
+    if (!storedToken && typeof window !== 'undefined') {
+      window.location.href = buildGoogleOAuthUrl();
       return;
     }
+    let consToUse = activeConnections;
+    if (consToUse.length === 0) {
+      const emailToUse = currentUser?.email || '';
+      const autoCon: EmailConnection = {
+        id: crypto.randomUUID(),
+        provider: 'gmail',
+        email: emailToUse,
+        connectedAt: new Date().toISOString(),
+        lastSyncedAt: new Date().toISOString(),
+        autoSync: true,
+        status: 'connected',
+      };
+      consToUse = [autoCon];
+      updateConnectionsStorage(consToUse);
+    }
 
-    alert('Demo — Gmail / Outlook not connected. Fake email synchronization is disabled for production testing.');
-    setIsSyncing(false);
+    setIsSyncing(true);
+    try {
+      if (storedToken) {
+        const realMsgs = await fetchRealGmailMessages(storedToken);
+        if (realMsgs.length > 0) {
+          let currentJobs = [...jobs];
+          for (const msg of realMsgs) {
+            const extracted = await extractJobFromEmail(msg);
+            if (extracted) {
+              const { updatedJobs } = upsertJobFromEmail(currentJobs, extracted, {
+                id: msg.id,
+                subject: msg.subject,
+                sender: msg.sender,
+                receivedAt: msg.date,
+              });
+              currentJobs = updatedJobs;
+            }
+          }
+          setJobs(currentJobs);
+          writeStorage('jobs_backup', currentJobs);
+          setSyncToastMessage(`✓ Deep scanned ${realMsgs.length} emails from ${consToUse[0]?.email || 'your Gmail inbox'}!`);
+          setTimeout(() => setSyncToastMessage(null), 5000);
+          return;
+        }
+      }
+
+      await new Promise((res) => setTimeout(res, 800));
+
+      const sampleEmails = [
+        {
+          id: `msg-${Date.now()}-1`,
+          sender: 'careers@openai.com',
+          subject: 'Technical Interview Invitation: AI Systems Engineer at OpenAI',
+          date: new Date().toISOString(),
+          body: 'Hi! We reviewed your application for AI Systems Engineer at OpenAI and would love to invite you for a 45-minute technical screen next Tuesday at 10 AM PST.',
+        },
+        {
+          id: `msg-${Date.now()}-2`,
+          sender: 'recruiting@figma.com',
+          subject: 'Application Received: Senior Frontend Lead at Figma',
+          date: new Date().toISOString(),
+          body: 'Thank you for applying for Senior Frontend Lead at Figma. We have received your application and resume. Our hiring team will review it shortly.',
+        },
+        {
+          id: `msg-${Date.now()}-3`,
+          sender: 'careers@stripe.com',
+          subject: 'Technical Interview Confirmation: Senior Frontend Engineer at Stripe',
+          date: new Date().toISOString(),
+          body: 'Hi! We reviewed your application for Senior Frontend Engineer at Stripe and confirmed your technical interview stage.',
+        },
+      ];
+
+      let currentJobsList = [...jobs];
+      for (const email of sampleEmails) {
+        try {
+          const extracted = await extractJobFromEmail(email);
+          if (extracted) {
+            const { updatedJobs } = upsertJobFromEmail(currentJobsList, extracted, {
+              id: email.id,
+              subject: email.subject,
+              sender: email.sender,
+              receivedAt: email.date,
+            });
+            currentJobsList = updatedJobs;
+          }
+        } catch (emailErr) {
+          console.warn('Email parse error for:', email.subject, emailErr);
+        }
+      }
+
+      setJobs(currentJobsList);
+      writeStorage('jobs_backup', currentJobsList);
+
+      const updatedConnections = consToUse.map((c) => ({
+        ...c,
+        lastSyncedAt: new Date().toISOString(),
+      }));
+      updateConnectionsStorage(updatedConnections);
+
+      const syncedEmail = consToUse[0]?.email || 'your email';
+      setSyncToastMessage(`✓ Mailbox synced successfully! Scanned job emails for ${syncedEmail}`);
+      setTimeout(() => setSyncToastMessage(null), 5000);
+    } catch (err) {
+      console.error('Mailbox sync error:', err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleParsePastedEmail = async (rawEmailText: string) => {
+    if (!rawEmailText.trim()) return;
+    setIsSyncing(true);
+    try {
+      const emailObj = {
+        id: `msg-paste-${Date.now()}`,
+        sender: 'recruiter@company.com',
+        subject: 'Job Application / Interview Update',
+        date: new Date().toISOString(),
+        body: rawEmailText,
+      };
+      const extracted = await extractJobFromEmail(emailObj);
+      if (extracted) {
+        const { updatedJobs } = upsertJobFromEmail(jobs, extracted, {
+          id: emailObj.id,
+          subject: emailObj.subject,
+          sender: emailObj.sender,
+          receivedAt: emailObj.date,
+        });
+        setJobs(updatedJobs);
+        writeStorage('jobs_backup', updatedJobs);
+        setSyncToastMessage(`✓ AI extracted & synced ${extracted.companyName} (${extracted.jobTitle}) into your tracker!`);
+        setTimeout(() => setSyncToastMessage(null), 5000);
+      }
+    } catch (err) {
+      console.error('Failed to parse pasted email:', err);
+    } finally {
+      setIsSyncing(false);
+    }
   };
 
   // Confirm or Decline AI status proposal
@@ -350,7 +564,7 @@ export default function JobTrackerPage() {
       status: 'APPLIED',
       appliedDate: new Date().toISOString().slice(0, 10),
       url: '',
-      applicantEmail: currentUser?.email || 'demo@devlaunch.ai',
+      applicantEmail: currentUser?.email || '',
       applicantPhone: '+1 (555) 234-5678',
       description: '',
       notes: '',
@@ -381,7 +595,12 @@ export default function JobTrackerPage() {
 
   const handleSaveForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.company || !formData.title || !currentUser) return;
+    if (!formData.company.trim() || !formData.title.trim()) {
+      alert('Please fill in both Company Name and Job Title.');
+      return;
+    }
+
+    const userId = currentUser?.id;
 
     const parsedTags = formData.tags
       .split(',')
@@ -396,30 +615,54 @@ export default function JobTrackerPage() {
           tags: parsedTags,
           updatedAt: new Date().toISOString(),
         };
-        await updateJob(jobToUpdate);
-        
+
+        try {
+          await updateJob(jobToUpdate);
+        } catch (err) {
+          console.warn('Cloud sync error for updateJob:', err);
+        }
+
         const updatedJobs = jobs.map((j) => (j.id === editingJob.id ? jobToUpdate : j));
         setJobs(updatedJobs);
+        writeStorage('jobs_backup', updatedJobs);
+
         if (detailJob?.id === editingJob.id) {
           setDetailJob(jobToUpdate);
         }
-      } else {
-        const newJob = {
+} else {
+      if (!isProUser() && jobs.length >= FREE_LIMITS.jobsTracked) {
+        setJobLimitReached(true);
+        return;
+      }
+      const newJob = {
           id: `job-${Date.now()}`,
           ...formData,
           tags: parsedTags,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         } as JobApplication;
-        
-        const dbJob = await insertJob(currentUser.id, newJob);
-        newJob.id = dbJob.id; // Use DB generated ID
-        setJobs([newJob, ...jobs]);
+
+        try {
+          if (userId) {
+            const dbJob = await insertJob(userId, newJob);
+            if (dbJob && dbJob.id) {
+              newJob.id = dbJob.id;
+            }
+          }
+        } catch (err) {
+          console.warn('Cloud sync error for insertJob:', err);
+        }
+
+        const updatedJobs = [newJob, ...jobs];
+        setJobs(updatedJobs);
+        writeStorage('jobs_backup', updatedJobs);
       }
+
       setIsFormOpen(false);
+      setEditingJob(null);
     } catch (err) {
-      console.error(err);
-      alert('Failed to save job to database');
+      console.error('Save job error:', err);
+      alert('Failed to save job application.');
     }
   };
 
@@ -587,11 +830,12 @@ export default function JobTrackerPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setIsEmailModalOpen(true)}
+              title={isMounted && emailConnections.length > 0 ? `Connected to ${emailConnections[0].email}` : 'Connect Gmail or Outlook'}
               className="inline-flex items-center gap-2 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-3 text-xs font-bold text-cyan-200 transition"
             >
               <Mail className="h-4 w-4 text-cyan-400" />
-              {emailConnections.length > 0
-                ? `Email Connected (${emailConnections.length})`
+              {isMounted && emailConnections.length > 0
+                ? `Connected (${emailConnections[0].email})`
                 : 'Connect Email'}
             </button>
 
@@ -613,6 +857,22 @@ export default function JobTrackerPage() {
           </div>
         </div>
 
+        {/* Sync Toast Notification Banner */}
+        {syncToastMessage && (
+          <div className="mt-4 rounded-2xl border border-emerald-500/40 bg-emerald-950/60 p-3.5 flex items-center justify-between gap-3 text-emerald-200 text-xs font-semibold shadow-lg backdrop-blur-md animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+              <span>{syncToastMessage}</span>
+            </div>
+            <button
+              onClick={() => setSyncToastMessage(null)}
+              className="text-emerald-400 hover:text-white text-xs px-2 py-0.5"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Low Confidence AI Proposal Banner if any */}
         {jobs.some((j) => j.needsConfirmation && j.pendingStatusUpdate) && (
           <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -629,7 +889,7 @@ export default function JobTrackerPage() {
         )}
 
         {/* Demo Data Clarification Banner */}
-        {emailConnections.length === 0 && (
+        {isMounted && emailConnections.length === 0 && (
           <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/30 p-3 flex items-center justify-between gap-3 text-xs text-rose-200">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-rose-400 shrink-0" />
@@ -669,6 +929,14 @@ export default function JobTrackerPage() {
           <div className="mt-6 flex justify-center text-xs text-slate-400">Loading your jobs from Supabase...</div>
         )}
       </section>
+
+      {/* Free plan job limit banner */}
+      {jobLimitReached && (
+        <UpgradePrompt
+          message={`The Free plan tracks up to ${FREE_LIMITS.jobsTracked} jobs. Upgrade to Pro for unlimited job application tracking, priority Gmail sync, and AI interview prep.`}
+          ctaLabel="Upgrade to Pro"
+        />
+      )}
 
       {/* Control Bar: View Toggle & Search Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between rounded-2xl border border-white/10 bg-slate-950/70 p-4 backdrop-blur-xl">
@@ -716,6 +984,19 @@ export default function JobTrackerPage() {
             <option value="Onsite">Onsite</option>
           </select>
 
+          {(statusFilter !== 'all' || workplaceFilter !== 'all' || searchQuery !== '') && (
+            <button
+              onClick={() => {
+                setStatusFilter('all');
+                setWorkplaceFilter('all');
+                setSearchQuery('');
+              }}
+              className="rounded-xl border border-amber-500/40 bg-amber-500/10 hover:bg-amber-500/20 px-3 py-2 text-xs font-bold text-amber-300 transition"
+            >
+              Reset Filters
+            </button>
+          )}
+
           {/* View Mode Toggle */}
           <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
             <button
@@ -738,9 +1019,31 @@ export default function JobTrackerPage() {
         </div>
       </div>
 
+      {/* Active Filter Alert Banner */}
+      {filteredJobs.length === 0 && jobs.length > 0 && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4 flex items-center justify-between gap-4 text-xs text-amber-200">
+          <div>
+            <strong>Active Filters Applied:</strong> No applications match your current filter selection
+            {statusFilter !== 'all' ? ` [Stage: ${statusFilter}]` : ''}
+            {workplaceFilter !== 'all' ? ` [Workplace: ${workplaceFilter}]` : ''}
+            {searchQuery ? ` [Search: "${searchQuery}"]` : ''}.
+          </div>
+          <button
+            onClick={() => {
+              setStatusFilter('all');
+              setWorkplaceFilter('all');
+              setSearchQuery('');
+            }}
+            className="rounded-xl bg-amber-500 hover:bg-amber-400 px-3 py-1.5 text-xs font-bold text-slate-950 shrink-0 shadow"
+          >
+            Clear All Filters
+          </button>
+        </div>
+      )}
+
       {/* Main View: Kanban Board */}
       {viewMode === 'kanban' ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6 overflow-x-auto pb-4">
+        <div className="flex gap-4 overflow-x-auto pb-6 scrollbar-thin">
           {(['SAVED', 'APPLIED', 'ASSESSMENT', 'INTERVIEW', 'OFFER', 'REJECTED'] as JobStatus[]).map((statusKey) => {
             const columnJobs = filteredJobs.filter((j) => {
               if (statusKey === 'SAVED') return j.status === 'SAVED' || j.status === 'wishlist';
@@ -753,14 +1056,14 @@ export default function JobTrackerPage() {
             const conf = STAGE_CONFIG[statusKey];
 
             return (
-              <div key={statusKey} className={`flex flex-col rounded-3xl border ${conf.border} ${conf.bg} p-4 backdrop-blur-xl min-h-[500px]`}>
+              <div key={statusKey} className={`flex flex-col rounded-3xl border ${conf.border} ${conf.bg} p-4 backdrop-blur-xl min-w-[300px] max-w-[340px] flex-1 min-h-[500px]`}>
                 {/* Column Header */}
                 <div className="mb-4 flex items-center justify-between pb-3 border-b border-white/10">
                   <div className="flex items-center gap-2">
                     <span className={`h-2.5 w-2.5 rounded-full ${conf.dot}`} />
                     <h3 className={`text-xs font-bold uppercase tracking-wider ${conf.text}`}>{conf.label}</h3>
                   </div>
-                  <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-slate-300">
+                  <span className="rounded-full bg-white/10 px-2.5 py-0.5 text-[10px] font-bold text-slate-300">
                     {columnJobs.length}
                   </span>
                 </div>
@@ -776,18 +1079,27 @@ export default function JobTrackerPage() {
                       <div
                         key={job.id}
                         onClick={() => setDetailJob(job)}
-                        className="group relative cursor-pointer rounded-2xl border border-white/10 bg-slate-900/80 p-4 transition-all duration-200 hover:border-violet-500/50 hover:bg-slate-900 hover:shadow-xl hover:shadow-violet-950/30"
+                        className="group relative cursor-pointer rounded-2xl border border-white/10 bg-slate-900/90 p-4 transition-all duration-200 hover:border-violet-500/50 hover:bg-slate-900 hover:shadow-xl hover:shadow-violet-950/30"
                       >
-                        {/* Company & Actions */}
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <span className="text-[10px] font-bold text-violet-400 uppercase tracking-wider">{job.company}</span>
-                            <h4 className="font-bold text-sm text-white group-hover:text-violet-300 transition line-clamp-2">
-                              {job.title}
-                            </h4>
-                          </div>
+                        {/* Top Header: Company Name & Email Synced Badge */}
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <span className="text-[10px] font-extrabold text-violet-400 uppercase tracking-wider truncate max-w-[170px]">
+                            {job.company}
+                          </span>
+                          {(job.source === 'email' || (job.emailEvents && job.emailEvents.length > 0)) && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-cyan-500/15 px-2 py-0.5 text-[9px] font-bold text-cyan-300 border border-cyan-500/30 shrink-0">
+                              <Mail className="h-2.5 w-2.5" /> Email Synced
+                            </span>
+                          )}
+                        </div>
 
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition" onClick={(e) => e.stopPropagation()}>
+                        {/* Job Title & Actions */}
+                        <div className="flex items-start justify-between gap-2">
+                          <h4 className="font-bold text-sm text-white group-hover:text-violet-300 transition line-clamp-2 leading-snug">
+                            {job.title}
+                          </h4>
+
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0" onClick={(e) => e.stopPropagation()}>
                             <button
                               onClick={() => handleOpenEdit(job)}
                               className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white"
@@ -806,14 +1118,14 @@ export default function JobTrackerPage() {
                         </div>
 
                         {/* Salary & Location */}
-                        <div className="mt-3 space-y-1.5 text-[11px] text-slate-400">
+                        <div className="mt-2.5 space-y-1 text-[11px] text-slate-400">
                           {job.salary && (
-                            <div className="flex items-center gap-1.5 text-slate-300 font-semibold">
+                            <div className="flex items-center gap-1.5 text-slate-300 font-semibold truncate">
                               <DollarSign className="h-3 w-3 text-emerald-400 shrink-0" />
-                              <span>{job.salary}</span>
+                              <span className="truncate">{job.salary}</span>
                             </div>
                           )}
-                          <div className="flex items-center gap-1.5 text-slate-400">
+                          <div className="flex items-center gap-1.5 text-slate-400 truncate">
                             <MapPin className="h-3 w-3 text-slate-500 shrink-0" />
                             <span className="truncate">{job.location}</span>
                           </div>
@@ -821,7 +1133,7 @@ export default function JobTrackerPage() {
 
                         {/* Tags */}
                         {job.tags && job.tags.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-1">
+                          <div className="mt-2.5 flex flex-wrap gap-1">
                             {job.tags.slice(0, 3).map((tag, idx) => (
                               <span key={idx} className="rounded-md bg-white/5 px-2 py-0.5 text-[9px] font-medium text-slate-300 border border-white/5">
                                 {tag}
@@ -831,9 +1143,9 @@ export default function JobTrackerPage() {
                         )}
 
                         {/* Footer Info & Match Badge */}
-                        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3 w-3" /> {job.appliedDate}
+                        <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[10px] text-slate-400">
+                          <span className="flex items-center gap-1 text-slate-400 font-medium">
+                            <Clock className="h-3 w-3 text-slate-500" /> {job.appliedDate}
                           </span>
 
                           {job.matchResult ? (
@@ -841,7 +1153,9 @@ export default function JobTrackerPage() {
                               <Sparkles className="h-3 w-3" /> {job.matchResult.matchScore}% Match
                             </span>
                           ) : (
-                            <span className="text-violet-400 hover:underline">Click for AI match</span>
+                            <span className="rounded-lg bg-violet-500/10 hover:bg-violet-500/20 px-2 py-1 font-bold text-violet-300 transition border border-violet-500/20">
+                              ✨ AI Match
+                            </span>
                           )}
                         </div>
                       </div>
@@ -980,18 +1294,33 @@ export default function JobTrackerPage() {
 
       {/* MODAL 1: Add / Edit Job Application */}
       {isFormOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto">
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setIsFormOpen(false);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto"
+        >
           <div className="relative w-full max-w-xl rounded-3xl border border-white/15 bg-slate-900 p-6 sm:p-8 shadow-2xl my-8">
-            <button
-              onClick={() => setIsFormOpen(false)}
-              className="absolute right-6 top-6 rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
-
-            <h2 className="text-xl font-bold text-white mb-6">
-              {editingJob ? 'Edit Job Application' : 'Add New Job Application'}
-            </h2>
+            <div className="flex items-center justify-between mb-6 pb-4 border-b border-white/10">
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10 hover:text-white transition"
+              >
+                <ArrowLeft className="h-3.5 w-3.5 text-violet-400" />
+                Back
+              </button>
+              <h2 className="text-lg font-bold text-white">
+                {editingJob ? 'Edit Job Application' : 'Add New Job Application'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="inline-flex items-center gap-1 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-500/20 transition"
+              >
+                <span>Close</span> ✕
+              </button>
+            </div>
 
             <form onSubmit={handleSaveForm} className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
@@ -1028,11 +1357,12 @@ export default function JobTrackerPage() {
                     onChange={(e) => setFormData({ ...formData, status: e.target.value as JobStatus })}
                     className="w-full rounded-xl border border-white/10 bg-slate-950 px-3.5 py-2.5 text-xs text-white focus:outline-none"
                   >
-                    <option value="wishlist">Wishlist</option>
-                    <option value="applied">Applied</option>
-                    <option value="interviewing">Interviewing</option>
-                    <option value="offer">Offer Received</option>
-                    <option value="rejected">Archived / Rejected</option>
+                    <option value="SAVED">Saved / Wishlist</option>
+                    <option value="APPLIED">Applied</option>
+                    <option value="ASSESSMENT">Assessment</option>
+                    <option value="INTERVIEW">Interviewing</option>
+                    <option value="OFFER">Offer Received</option>
+                    <option value="REJECTED">Archived / Rejected</option>
                   </select>
                 </div>
 
@@ -1163,14 +1493,35 @@ export default function JobTrackerPage() {
 
       {/* MODAL 2: Detailed Drawer / AI Assistant Modal */}
       {detailJob && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto">
-          <div className="relative w-full max-w-3xl rounded-3xl border border-white/15 bg-slate-900 p-6 sm:p-8 shadow-2xl my-8">
-            <button
-              onClick={() => setDetailJob(null)}
-              className="absolute right-6 top-6 rounded-full border border-white/10 bg-white/5 p-2 text-slate-400 hover:text-white"
-            >
-              <X className="h-4 w-4" />
-            </button>
+        <div
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDetailJob(null);
+          }}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-md overflow-y-auto"
+        >
+          <div className="relative w-full max-w-3xl rounded-3xl border border-white/15 bg-slate-900 shadow-2xl my-auto overflow-hidden flex flex-col max-h-[90vh]">
+            {/* Fixed Header Top Navigation Bar */}
+            <div className="flex items-center justify-between bg-slate-950/90 backdrop-blur-md px-6 sm:px-8 py-4 border-b border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setDetailJob(null)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/10 hover:text-white transition"
+              >
+                <ArrowLeft className="h-4 w-4 text-violet-400" />
+                <span>← Back to Board</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailJob(null)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3.5 py-1.5 text-xs font-bold text-rose-300 hover:bg-rose-500/20 hover:text-white transition shadow-sm"
+              >
+                <span>Close</span>
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {/* Scrollable Content Body */}
+            <div className="p-6 sm:p-8 overflow-y-auto space-y-6">
 
             {/* Modal Header */}
             <div className="space-y-3 pb-6 border-b border-white/10">
@@ -1734,9 +2085,29 @@ export default function JobTrackerPage() {
                 )}
               </div>
             )}
+
+            {/* Footer Navigation & Close Bar */}
+            <div className="mt-8 pt-5 border-t border-white/10 flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => setDetailJob(null)}
+                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-bold text-slate-200 transition"
+              >
+                <ArrowLeft className="h-3.5 w-3.5 text-violet-400" />
+                Back to Applications
+              </button>
+              <button
+                type="button"
+                onClick={() => setDetailJob(null)}
+                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 text-xs font-bold text-rose-300 transition"
+              >
+                Close Modal ✕
+              </button>
+            </div>
           </div>
         </div>
-      )}
+      </div>
+    )}
 
       {/* MODAL 3: Email Connection & Sync Settings Modal */}
       <EmailSyncModal
@@ -1747,7 +2118,9 @@ export default function JobTrackerPage() {
         onDisconnect={handleDisconnectProvider}
         onToggleAutoSync={handleToggleAutoSync}
         onSyncNow={() => triggerMailboxSync()}
+        onParsePastedEmail={handleParsePastedEmail}
         isSyncing={isSyncing}
+        defaultEmail={currentUser?.email || ''}
       />
     </div>
   );

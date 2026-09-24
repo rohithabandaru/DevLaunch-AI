@@ -3,33 +3,44 @@ import { PortfolioData } from '@/components/portfolio/portfolio-themes';
 
 export const fetchPortfolio = async (userId: string) => {
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('portfolios')
-    .select('*')
-    .eq('user_id', userId)
-    .single();
+  try {
+    const { data, error } = await supabase
+      .from('portfolios')
+      .select('*')
+      .eq('user_id', userId)
+      .single();
 
-  if (error && error.code !== 'PGRST116') {
-    throw error;
+    if (error && error.code !== 'PGRST116') {
+      console.warn('Error fetching portfolio:', error.message || error);
+    }
+    return data;
+  } catch (err) {
+    console.warn('Network or Supabase error fetching portfolio:', err);
+    return null;
   }
-  return data;
 };
 
 export const fetchPublicPortfolio = async (slug: string) => {
-  // We use createBrowserClient in app-provider, so this can be used client side
-  // Alternatively we can fetch without auth for public view
-  if (!supabase) throw new Error('Supabase not configured');
-  const { data, error } = await supabase
-    .from('portfolios')
-    .select('data, theme')
-    .eq('slug', slug)
-    .eq('is_published', true)
-    .single();
+  if (!supabase) return null;
+  try {
+    const { data, error } = await supabase
+      .from('portfolios')
+      .select('data, theme')
+      .eq('slug', slug)
+      .eq('is_published', true)
+      .maybeSingle();
 
-  if (error) {
-    throw error;
+    if (error) {
+      if (error.code !== 'PGRST116') {
+        console.warn('Failed to fetch public portfolio:', error.message || error);
+      }
+      return null;
+    }
+    return data;
+  } catch (err) {
+    console.warn('Network error or failed to fetch public portfolio:', err);
+    return null;
   }
-  return data;
 };
 
 export const savePortfolio = async (
@@ -40,45 +51,50 @@ export const savePortfolio = async (
   isPublished: boolean
 ) => {
   if (!supabase) return;
-  
-  const { data: existing, error: findError } = await supabase
-    .from('portfolios')
-    .select('id')
-    .eq('user_id', userId)
-    .single();
 
-  if (findError && findError.code !== 'PGRST116') {
-    console.error("Error finding portfolio:", findError);
-  }
+  try {
+    const { data: existing, error: findError } = await supabase
+      .from('portfolios')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
 
-  if (existing) {
-    const { error } = await supabase
-      .from('portfolios')
-      .update({
-        data: portfolioData,
-        theme,
-        slug,
-        is_published: isPublished,
-        updated_at: new Date().toISOString()
-      })
-      .eq('id', existing.id);
-    if (error) {
-      console.error("Supabase Update Error:", error.message || error);
-      throw error;
+    if (findError && findError.code !== 'PGRST116') {
+      console.error("Error finding portfolio:", findError);
     }
-  } else {
-    const { error } = await supabase
-      .from('portfolios')
-      .insert({
-        user_id: userId,
-        data: portfolioData,
-        theme,
-        slug,
-        is_published: isPublished
-      });
-    if (error) {
-      console.error("Supabase Insert Error:", error.message || error);
-      throw error;
+
+    if (existing) {
+      const { error } = await supabase
+        .from('portfolios')
+        .update({
+          data: portfolioData,
+          theme,
+          slug,
+          is_published: isPublished,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', existing.id);
+      if (error) {
+        console.error("Supabase Update Error:", error.message || error);
+        throw error;
+      }
+    } else {
+      const { error } = await supabase
+        .from('portfolios')
+        .insert({
+          user_id: userId,
+          data: portfolioData,
+          theme,
+          slug,
+          is_published: isPublished
+        });
+      if (error) {
+        console.error("Supabase Insert Error:", error.message || error);
+        throw error;
+      }
     }
+  } catch (err) {
+    console.error("Failed to save portfolio to Supabase:", err);
+    throw err;
   }
 };

@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Play, Sparkles, CheckCircle2, RefreshCw, Cpu, FileText, ArrowRight } from 'lucide-react';
+import { X, Sparkles, CheckCircle2, RefreshCw, Cpu, ArrowRight } from 'lucide-react';
 
 interface DemoModalProps {
   isOpen: boolean;

@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Globe, Share2, Plus, Trash2, Check, ExternalLink, Laptop, Smartphone, Tablet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { readStorage, writeStorage } from '@/lib/storage';
 import { PortfolioData, PORTFOLIO_THEMES, PortfolioThemeRenderer } from '@/components/portfolio/portfolio-themes';
 import { fetchPortfolio, savePortfolio } from '@/lib/supabase-portfolios';
 import { useAuth } from '@/components/providers/app-provider';
@@ -162,7 +161,7 @@ export default function PortfolioBuilderPage() {
   const [isPublished, setIsPublished] = useState(false);
   const [slug, setSlug] = useState('alexmorgan');
   
-  const [isLoading, setIsLoading] = useState(true);
+  const [, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {

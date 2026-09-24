@@ -81,6 +81,13 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
           setLoading(false);
           return;
         }
+        // ── Terms agreement validation ──
+        if (!agreedToTerms) {
+          setMessage('Please check the box to agree to the Terms of Service and Privacy Policy.');
+          setLoading(false);
+          return;
+        }
+
         result = await signUp({ name, email: emailLower, password });
       } else if (mode === 'forgot') {
         result = await forgotPassword(email);
@@ -94,7 +101,13 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
         setMessage(result);
       }
 
-      if (result.includes('successfully') || result.includes('sent')) {
+      const resLower = (result || '').toLowerCase();
+      if (
+        resLower.includes('successfully') ||
+        resLower.includes('sent') ||
+        resLower.includes('signed in') ||
+        resLower.includes('account created')
+      ) {
         setTimeout(() => {
           router.push('/dashboard');
         }, 400);
@@ -110,9 +123,16 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
     try {
       const res = await signInWithGoogle();
       setMessage(res);
-      setTimeout(() => {
-        router.push('/dashboard');
-      }, 400);
+      const resLower = (res || '').toLowerCase();
+      if (
+        resLower.includes('successfully') ||
+        resLower.includes('redirecting') ||
+        resLower.includes('signed in')
+      ) {
+        setTimeout(() => {
+          router.push('/dashboard');
+        }, 400);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -133,80 +153,35 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
     mode === 'signup'
       ? 'Start building your career portfolio in under 30 seconds.'
       : mode === 'forgot'
-      ? "Enter your email and we'll send you a reset link."
-      : 'Sign in to your DevLaunch AI dashboard.';
+        ? "Enter your email and we'll send you a reset link."
+        : 'Sign in to your DevLaunch AI dashboard.';
   const submitLabel =
     mode === 'signup' ? 'Create Free Account' : mode === 'forgot' ? 'Send Reset Link' : 'Sign In';
 
   return (
-    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-12 text-slate-100 selection:bg-violet-500/30 sm:py-16">
+    <div className="relative min-h-screen overflow-hidden bg-slate-950 px-4 py-12 text-slate-100 selection:bg-violet-500/30 sm:py-16 flex flex-col items-center justify-center">
       {/* Ambient glow effects */}
       <div className="pointer-events-none absolute -top-40 left-1/2 -z-10 h-[600px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-tr from-violet-600/30 via-cyan-500/20 to-transparent blur-3xl opacity-70" />
       <div className="pointer-events-none absolute bottom-0 right-0 -z-10 h-[400px] w-[600px] rounded-full bg-gradient-to-tl from-emerald-600/15 via-cyan-500/10 to-transparent blur-3xl opacity-50" />
 
-      <div className="mx-auto flex max-w-6xl flex-col gap-12 lg:flex-row lg:items-center lg:justify-between">
-        {/* ===================== LEFT COLUMN ===================== */}
-        <div className="flex-1 space-y-6">
-          <Link href="/" className="inline-flex items-center gap-2 text-2xl font-bold tracking-tight">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 text-white shadow-lg shadow-violet-500/30">
-              <Sparkles className="h-5 w-5" />
+      <div className="w-full max-w-md space-y-6">
+        {/* ── Brand Logo & Header ── */}
+        <div className="text-center space-y-2">
+          <Link href="/" className="inline-flex items-center gap-2.5 text-2xl font-bold tracking-tight group">
+            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-cyan-500 to-indigo-500 text-white shadow-xl shadow-violet-500/25 group-hover:scale-105 transition-transform">
+              <Sparkles className="h-6 w-6 text-white" />
             </div>
-            <span className="bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
+            <span className="bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-2xl font-extrabold text-transparent">
               DevLaunch AI
             </span>
           </Link>
-
-          <div className="inline-flex items-center gap-2 rounded-full border border-violet-500/30 bg-violet-500/10 px-3.5 py-1 text-xs font-medium text-violet-300 backdrop-blur-md">
-            <ShieldCheck className="h-3.5 w-3.5 text-violet-400" /> Executive career suite for developers
-          </div>
-
-          <h1 className="text-4xl font-extrabold tracking-tight sm:text-5xl lg:text-6xl">
-            Land your dream role with{' '}
-            <span className="bg-gradient-to-r from-violet-400 via-cyan-300 to-emerald-400 bg-clip-text text-transparent">
-              AI Intelligence
-            </span>
-          </h1>
-
-          <p className="max-w-xl text-base text-slate-400 sm:text-lg">
-            Build ATS-optimized resumes, publish sleek portfolio websites, analyze keyword coverage, and generate
-            personalized cover letters — in minutes.
+          <p className="text-xs font-medium text-slate-400">
+            Build ATS resumes, developer portfolios & track jobs with AI
           </p>
-
-          <div className="grid gap-4 pt-2 sm:grid-cols-2">
-            {features.map((feature, i) => (
-              <div
-                key={i}
-                className="rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur-md transition hover:border-violet-500/30"
-              >
-                <div className="flex items-center gap-2 font-semibold text-slate-200">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                  {feature.title}
-                </div>
-                <p className="mt-1.5 text-xs text-slate-400">{feature.desc}</p>
-              </div>
-            ))}
-          </div>
-
-          {/* Social proof */}
-          <div className="flex items-center gap-3 pt-2">
-            <div className="flex -space-x-2">
-              {['🧑‍💻', '👩‍💼', '👨‍🎨', '👩‍🔬'].map((emoji, i) => (
-                <div
-                  key={i}
-                  className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-slate-950 bg-slate-800 text-sm"
-                >
-                  {emoji}
-                </div>
-              ))}
-            </div>
-            <p className="text-xs text-slate-400">
-              <span className="font-semibold text-white">2,400+</span> developers already building with DevLaunch AI
-            </p>
-          </div>
         </div>
 
-        {/* ===================== RIGHT COLUMN — FORM ===================== */}
-        <div className="w-full max-w-md rounded-3xl border border-white/15 bg-slate-900/80 p-6 shadow-2xl shadow-violet-950/40 backdrop-blur-xl sm:p-8">
+        {/* ── FORM CARD ── */}
+        <div className="w-full rounded-3xl border border-white/15 bg-slate-900/80 p-6 shadow-2xl shadow-violet-950/40 backdrop-blur-xl sm:p-8">
           {/* ── Mode Switcher Tabs ── */}
           <div className="mb-6 flex gap-1.5 rounded-full bg-white/5 p-1 border border-white/10">
             {([
@@ -220,8 +195,9 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                 onClick={() => {
                   setMode(tab.key);
                   setMessage('');
+                  if (tab.href) router.push(tab.href);
                 }}
-                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-all ${
+                className={`flex-1 rounded-full px-3 py-2 text-xs font-semibold transition-all cursor-pointer ${
                   mode === tab.key
                     ? 'bg-violet-600 text-white shadow-md'
                     : 'text-slate-400 hover:text-slate-200'
@@ -233,7 +209,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
           </div>
 
           {/* ── Heading ── */}
-          <div className="mb-6 space-y-1">
+          <div className="mb-6 space-y-1 text-center">
             <h2 className="text-xl font-bold text-white">{headingText}</h2>
             <p className="text-xs text-slate-400">{subText}</p>
           </div>
@@ -245,7 +221,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                 type="button"
                 onClick={handleGoogleLogin}
                 disabled={googleLoading || loading}
-                className="mb-5 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white/5 py-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10 hover:border-white/25 active:scale-[0.99] disabled:opacity-50"
+                className="mb-5 flex w-full items-center justify-center gap-3 rounded-2xl border border-white/15 bg-white/5 py-3 text-xs font-semibold text-slate-200 transition hover:bg-white/10 hover:border-white/25 active:scale-[0.99] disabled:opacity-50 cursor-pointer"
               >
                 {googleLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -342,7 +318,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                     type="button"
                     tabIndex={-1}
                     onClick={() => setShowPassword((v) => !v)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </button>
@@ -375,7 +351,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                 <button
                   type="button"
                   onClick={() => { setMode('forgot'); setMessage(''); }}
-                  className="text-xs font-medium text-violet-400 hover:text-violet-300 transition"
+                  className="text-xs font-medium text-violet-400 hover:text-violet-300 transition cursor-pointer"
                 >
                   Forgot password?
                 </button>
@@ -402,8 +378,8 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
             {/* Submit button */}
             <Button
               type="submit"
-              className="w-full rounded-2xl bg-violet-600 hover:bg-violet-500 py-3 text-xs font-semibold text-white shadow-lg shadow-violet-600/30 transition disabled:opacity-50"
-              disabled={loading || (mode === 'signup' && !agreedToTerms)}
+              className="w-full rounded-2xl bg-violet-600 hover:bg-violet-500 py-3 text-xs font-semibold text-white shadow-lg shadow-violet-600/30 transition disabled:opacity-50 cursor-pointer"
+              disabled={loading}
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2">
@@ -428,8 +404,6 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                 {message}
               </div>
             )}
-
-
           </form>
 
           {/* ── Cross-page navigation ── */}
@@ -456,7 +430,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
                 <button
                   type="button"
                   onClick={() => { setMode('login'); setMessage(''); }}
-                  className="font-semibold text-violet-400 hover:text-violet-300 transition"
+                  className="font-semibold text-violet-400 hover:text-violet-300 transition cursor-pointer"
                 >
                   Back to Login
                 </button>

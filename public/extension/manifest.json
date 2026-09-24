@@ -1,9 +1,16 @@
 {
   "manifest_version": 3,
   "name": "DevLaunch AI - 1-Click Job Clipper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Clip and save job postings from LinkedIn, Indeed, and Glassdoor directly into your DevLaunch AI Job Tracker.",
-  "permissions": ["activeTab", "storage", "scripting"],
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_title": "Save to DevLaunch AI"
@@ -15,7 +22,12 @@
         "https://*.indeed.com/*",
         "https://www.glassdoor.com/*"
       ],
-      "js": ["content.js"]
+      "js": [
+        "content.js"
+      ]
     }
+  ],
+  "host_permissions": [
+    "http://localhost:3000/*"
   ]
 }

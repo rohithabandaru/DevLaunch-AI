@@ -1,34 +1,34 @@
 'use client';
 
 import React from 'react';
-import { FileText, Globe, Award, Layout, Sparkles } from 'lucide-react';
+import { FileText, Globe, Award, Layout } from 'lucide-react';
 
 const stats = [
   {
-    value: '100K+',
-    label: 'Resumes Created',
-    detail: 'Optimized for FAANG & top startups',
+    value: '30+',
+    label: 'Resume Templates',
+    detail: 'ATS-optimized for tech & startup roles',
     icon: FileText,
     gradient: 'from-indigo-400 to-indigo-600',
   },
   {
-    value: '25K+',
-    label: 'Portfolios Published',
-    detail: 'Hosted on lightning-fast edge networks',
+    value: '30+',
+    label: 'Portfolio Themes',
+    detail: 'Modern developer & designer layouts',
     icon: Globe,
     gradient: 'from-purple-400 to-purple-600',
   },
   {
-    value: '98%',
-    label: 'ATS Success Rate',
-    detail: 'Guaranteed resume scanner readability',
+    value: '95%+',
+    label: 'ATS Pass Rate',
+    detail: 'Recruiter-tested scanner readability',
     icon: Award,
     gradient: 'from-emerald-400 to-teal-600',
   },
   {
-    value: '50+',
-    label: 'Curated Templates',
-    detail: 'Modern developer & designer themes',
+    value: '2 Min',
+    label: 'Average Build Time',
+    detail: 'AI-powered instant resume generation',
     icon: Layout,
     gradient: 'from-pink-400 to-rose-600',
   },

@@ -11,7 +11,6 @@ import {
   TrendingUp,
   Cpu,
   Star,
-  Award,
   Zap,
   Briefcase,
   Code2,

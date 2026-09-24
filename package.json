@@ -7,10 +7,12 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
     "test": "vitest",
     "test:run": "vitest run",
     "test:coverage": "vitest run --coverage",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "extension:build": "node scripts/build-extension-config.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -22,8 +24,9 @@
     "clsx": "^2.1.1",
     "framer-motion": "^12.42.2",
     "lucide-react": "^1.24.0",
-    "next": "16.2.10",
+    "next": "^16.3.5",
     "openai": "^4.52.0",
+    "razorpay": "^2.9.8",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "shadcn": "^4.13.0",
@@ -43,7 +46,7 @@
     "@types/react-dom": "^19",
     "@vitejs/plugin-react": "^6.0.5",
     "eslint": "^9",
-    "eslint-config-next": "16.2.10",
+    "eslint-config-next": "^16.3.5",
     "jsdom": "^30.0.1",
     "tailwindcss": "^4",
     "typescript": "^5",

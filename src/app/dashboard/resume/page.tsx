@@ -1,13 +1,15 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Sparkles, Download, Printer, Plus, Trash2, ArrowUp, ArrowDown, Copy, Share2, Check, RefreshCw, Wand2, ShieldCheck, FileText, ChevronRight } from 'lucide-react';
+import { Sparkles, Download, Printer, Plus, Trash2, Copy, Check, Wand2, ShieldCheck, FileText, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { readStorage, writeStorage } from '@/lib/storage';
-import { generateSummary, generateBulletPoints, generateProjectDescription, generateSkillsSuggestions, fixGrammarAndTone, generateATSAnalysis } from '@/lib/ai';
+import { generateSummary, generateBulletPoints, fixGrammarAndTone, generateATSAnalysis } from '@/lib/ai';
 import { ResumeData, ResumeRenderer, TEMPLATE_LIST } from '@/components/resume/resume-templates';
 import { fetchResume, saveResume } from '@/lib/supabase-documents';
 import { useAuth } from '@/components/providers/app-provider';
+import { isProUser, canUse, consume } from '@/lib/plan-limits';
+import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
 
 const DEFAULT_RESUME: ResumeData = {
   personalInfo: {
@@ -129,10 +131,19 @@ export default function ResumeBuilderPage() {
   const [activeTab, setActiveTab] = useState<'editor' | 'templates' | 'ai'>('editor');
   const [sectionFilter, setSectionFilter] = useState<'personal' | 'summary' | 'experience' | 'education' | 'projects' | 'skills' | 'extras'>('personal');
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [aiLimitReached, setAiLimitReached] = useState(false);
   const [resumesList, setResumesList] = useState<Array<{ id: string; name: string }>>([
     { id: 'res-default', name: 'Full Stack Engineer Resume' },
     { id: 'res-frontend', name: 'Frontend Tech Lead Resume' },
   ]);
+
+  const canRunAi = () => {
+    if (!isProUser() && !canUse('aiGenerations').allowed) {
+      setAiLimitReached(true);
+      return false;
+    }
+    return true;
+  };
 
   const updateResume = (next: ResumeData) => {
     setResume(next);
@@ -162,6 +173,7 @@ export default function ResumeBuilderPage() {
   };
 
   const handleAiSummary = async () => {
+    if (!canRunAi()) return;
     setIsAiLoading(true);
     try {
       const summaryText = await generateSummary(
@@ -170,12 +182,14 @@ export default function ResumeBuilderPage() {
         resume.skills.flatMap(s => s.items.split(','))
       );
       updateResume({ ...resume, summary: summaryText });
+      if (!isProUser()) consume('aiGenerations');
     } finally {
       setIsAiLoading(false);
     }
   };
 
   const handleAiBullets = async (expId: string) => {
+    if (!canRunAi()) return;
     setIsAiLoading(true);
     try {
       const targetExp = resume.experience.find(e => e.id === expId);
@@ -183,16 +197,19 @@ export default function ResumeBuilderPage() {
       const bullets = await generateBulletPoints(targetExp.role, targetExp.bullets.join(' '));
       const updatedExp = resume.experience.map(e => e.id === expId ? { ...e, bullets } : e);
       updateResume({ ...resume, experience: updatedExp });
+      if (!isProUser()) consume('aiGenerations');
     } finally {
       setIsAiLoading(false);
     }
   };
 
   const handleAiGrammarFix = async () => {
+    if (!canRunAi()) return;
     setIsAiLoading(true);
     try {
       const fixedSummary = await fixGrammarAndTone(resume.summary, 'Executive');
       updateResume({ ...resume, summary: fixedSummary });
+      if (!isProUser()) consume('aiGenerations');
     } finally {
       setIsAiLoading(false);
     }
@@ -255,6 +272,14 @@ export default function ResumeBuilderPage() {
           </Button>
         </div>
       </div>
+
+      {/* Free plan AI quota banner */}
+      {aiLimitReached && (
+        <UpgradePrompt
+          message="You have used all your free AI generations. Upgrade to Pro for unlimited AI resume writing, bullet points, and grammar enhancement."
+          ctaLabel="Upgrade to Pro"
+        />
+      )}
 
       {/* ATS Score Indicator */}
       <div className="grid gap-4 sm:grid-cols-4 print:hidden">
@@ -671,7 +696,7 @@ export default function ResumeBuilderPage() {
               {sectionFilter === 'extras' && (
                 <div className="space-y-4">
                   <h3 className="text-sm font-semibold text-white">Certificates & Certifications</h3>
-                  {resume.certificates.map((cert, idx) => (
+                  {resume.certificates.map((cert) => (
                     <div key={cert.id} className="rounded-xl border border-white/10 bg-white/5 p-3 space-y-2">
                       <div className="grid gap-2 sm:grid-cols-2">
                         <input

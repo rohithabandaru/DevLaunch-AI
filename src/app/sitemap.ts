@@ -1,7 +1,7 @@
 import { MetadataRoute } from 'next';
 
 export default function sitemap(): MetadataRoute.Sitemap {
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://devlaunch.ai';
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://dev-launch-ai-d7sq.vercel.app';
 
   const publicRoutes = [
     '',

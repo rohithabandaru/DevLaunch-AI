@@ -671,7 +671,7 @@ function getTheme(templateId: string): TemplateTheme {
 
 function SectionTitle({ title, theme }: { title: string; theme: TemplateTheme }) {
   return (
-    <h2 className={`text-sm font-bold uppercase tracking-wider mb-2 ${theme.heading} ${theme.sectionRule ?? ''}`}>
+    <h2 className={`text-sm font-bold uppercase tracking-wider mb-2 ${theme.heading} ${theme.sectionRule ?? ''} break-after-avoid print:break-after-avoid`}>
       {title}
     </h2>
   );
@@ -707,13 +707,13 @@ function ContactLine({
 function SkillsBlock({ skills, theme }: { skills: ResumeData['skills']; theme: TemplateTheme }) {
   if (!skills.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Skills" theme={theme} />
-      <div className="space-y-2 text-xs">
+      <div className="space-y-1.5 text-xs">
         {skills.map((s, i) => (
-          <div key={i}>
+          <div key={i} className="break-inside-avoid print:break-inside-avoid">
             <div className={`font-bold ${theme.muted}`}>{s.category}</div>
-            <div className="flex flex-wrap gap-1 mt-1">
+            <div className="flex flex-wrap gap-1 mt-0.5">
               {s.items.split(',').map((item, idx) => (
                 <span key={idx} className={`px-2 py-0.5 rounded text-[11px] ${theme.chip}`}>
                   {item.trim()}
@@ -730,11 +730,11 @@ function SkillsBlock({ skills, theme }: { skills: ResumeData['skills']; theme: T
 function EducationBlock({ education, theme }: { education: ResumeData['education']; theme: TemplateTheme }) {
   if (!education.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Education" theme={theme} />
       <div className="space-y-2 text-xs">
         {education.map((edu) => (
-          <div key={edu.id}>
+          <div key={edu.id} className="break-inside-avoid print:break-inside-avoid">
             <div className="font-bold">{edu.degree}</div>
             <div className={theme.muted}>
               {edu.school}
@@ -751,11 +751,11 @@ function EducationBlock({ education, theme }: { education: ResumeData['education
 function ExperienceBlock({ experience, theme }: { experience: ResumeData['experience']; theme: TemplateTheme }) {
   if (!experience.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Experience" theme={theme} />
-      <div className="space-y-4">
+      <div className="space-y-3.5 print:space-y-2.5">
         {experience.map((exp) => (
-          <div key={exp.id}>
+          <div key={exp.id} className="break-inside-avoid print:break-inside-avoid">
             <div className="flex justify-between items-baseline gap-2 text-xs font-bold">
               <span className="text-sm">{exp.role}</span>
               <span className={`shrink-0 ${theme.muted}`}>{exp.dates}</span>
@@ -764,7 +764,7 @@ function ExperienceBlock({ experience, theme }: { experience: ResumeData['experi
               {exp.company}
               {exp.location ? ` · ${exp.location}` : ''}
             </div>
-            <ul className="mt-1.5 list-disc list-inside text-xs space-y-1 opacity-90">
+            <ul className="mt-1 list-disc list-inside text-xs space-y-0.5 opacity-90">
               {exp.bullets.map((b, i) => (
                 <li key={i}>{b}</li>
               ))}
@@ -779,11 +779,11 @@ function ExperienceBlock({ experience, theme }: { experience: ResumeData['experi
 function ProjectsBlock({ projects, theme }: { projects: ResumeData['projects']; theme: TemplateTheme }) {
   if (!projects.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Featured Projects" theme={theme} />
-      <div className="space-y-3">
+      <div className="space-y-2.5 print:space-y-2">
         {projects.map((proj) => (
-          <div key={proj.id} className={`rounded-lg p-3 border ${theme.border} ${theme.accentSoft.includes('bg-') ? '' : ''} bg-black/[0.02]`}>
+          <div key={proj.id} className={`rounded-lg p-2.5 sm:p-3 border ${theme.border} bg-black/[0.02] break-inside-avoid print:break-inside-avoid`}>
             <div className="flex flex-wrap justify-between items-center gap-2 text-xs font-bold">
               <span>{proj.title}</span>
               {proj.techStack && (
@@ -801,11 +801,11 @@ function ProjectsBlock({ projects, theme }: { projects: ResumeData['projects']; 
 function CertificatesBlock({ certificates, theme }: { certificates: ResumeData['certificates']; theme: TemplateTheme }) {
   if (!certificates.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Certificates" theme={theme} />
       <div className="space-y-1 text-xs">
         {certificates.map((c) => (
-          <div key={c.id}>
+          <div key={c.id} className="break-inside-avoid print:break-inside-avoid">
             <span className="font-semibold">{c.name}</span>
             <span className={theme.muted}>
               {' '}
@@ -822,11 +822,11 @@ function CertificatesBlock({ certificates, theme }: { certificates: ResumeData['
 function LanguagesBlock({ languages, theme }: { languages: ResumeData['languages']; theme: TemplateTheme }) {
   if (!languages.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Languages" theme={theme} />
       <div className="text-xs space-y-1">
         {languages.map((l, i) => (
-          <div key={i} className="flex justify-between gap-2">
+          <div key={i} className="flex justify-between gap-2 break-inside-avoid print:break-inside-avoid">
             <span>{l.language}</span>
             <span className={theme.muted}>{l.proficiency}</span>
           </div>
@@ -839,11 +839,11 @@ function LanguagesBlock({ languages, theme }: { languages: ResumeData['languages
 function AchievementsBlock({ achievements, theme }: { achievements: ResumeData['achievements']; theme: TemplateTheme }) {
   if (!achievements.length) return null;
   return (
-    <section>
+    <section className="break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Achievements" theme={theme} />
-      <div className="space-y-2 text-xs">
+      <div className="space-y-1.5 text-xs">
         {achievements.map((a) => (
-          <div key={a.id}>
+          <div key={a.id} className="break-inside-avoid print:break-inside-avoid">
             <div className="font-bold">
               {a.title}
               {a.date ? <span className={`font-normal ${theme.muted}`}> · {a.date}</span> : null}
@@ -865,7 +865,7 @@ function AchievementsBlock({ achievements, theme }: { achievements: ResumeData['
 function SummaryBlock({ summary, theme }: { summary: string; theme: TemplateTheme }) {
   if (!summary) return null;
   return (
-    <section className="mb-6">
+    <section className="mb-4 print:mb-3 break-inside-avoid print:break-inside-avoid">
       <SectionTitle title="Professional Summary" theme={theme} />
       <p className="text-xs leading-relaxed opacity-90">{summary}</p>
     </section>
@@ -958,7 +958,7 @@ function SidebarExtras({
 function AtsLayout({ data, theme }: { data: ResumeData; theme: TemplateTheme }) {
   const { personalInfo, summary, education, experience, projects, skills, certificates, achievements, languages } = data;
   return (
-    <div className={`${theme.page} p-8 ${theme.text} ${theme.font ?? 'font-serif'} text-sm leading-relaxed max-w-4xl mx-auto shadow-sm print:p-0 print:shadow-none`}>
+    <div className={`${theme.page} p-8 ${theme.text} ${theme.font ?? 'font-serif'} text-sm leading-relaxed max-w-4xl mx-auto shadow-sm print:px-6 print:py-4 print:shadow-none`}>
       <header className={`text-center border-b pb-4 mb-4 ${theme.border}`}>
         <h1 className="text-2xl font-bold uppercase tracking-wide">{personalInfo.fullName || 'FULL NAME'}</h1>
         <ContactLine personalInfo={personalInfo} withIcons={false} className={`justify-center mt-1 ${theme.muted}`} />
@@ -1359,29 +1359,29 @@ function StandardLayout({
 
   return (
     <div
-      className={`${theme.page} p-8 ${theme.text} ${theme.font ?? 'font-sans'} text-sm leading-relaxed max-w-4xl mx-auto shadow-xl rounded-xl border ${theme.border} print:p-0 print:border-none print:shadow-none`}
+      className={`${theme.page} p-6 sm:p-8 ${theme.text} ${theme.font ?? 'font-sans'} text-sm leading-relaxed max-w-4xl mx-auto shadow-xl rounded-xl border ${theme.border} print:px-6 print:py-4 print:border-none print:shadow-none print:max-w-none`}
     >
       <header
-        className={`pb-6 mb-6 ${
+        className={`pb-4 mb-4 print:pb-3 print:mb-3 ${
           useBanner
-            ? `${theme.headerBg} ${theme.headerText ?? 'text-white'} p-6 -mx-8 -mt-8 rounded-t-xl`
+            ? `${theme.headerBg} ${theme.headerText ?? 'text-white'} p-6 -mx-8 -mt-8 rounded-t-xl print:rounded-none`
             : `border-b ${theme.border}`
         }`}
       >
-        <h1 className="text-3xl font-extrabold tracking-tight">{personalInfo.fullName || 'Your Name'}</h1>
+        <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">{personalInfo.fullName || 'Your Name'}</h1>
         <ContactLine personalInfo={personalInfo} className="mt-2" />
       </header>
 
       <SummaryBlock summary={summary} theme={theme} />
 
-      <div className={twoColumn ? 'grid grid-cols-1 sm:grid-cols-3 gap-6' : 'space-y-6'}>
-        <div className={twoColumn ? 'sm:col-span-2 space-y-6' : 'space-y-6'}>
+      <div className={twoColumn ? 'grid grid-cols-1 sm:grid-cols-3 gap-5 print:gap-4' : 'space-y-4 print:space-y-3.5'}>
+        <div className={twoColumn ? 'sm:col-span-2 space-y-4 print:space-y-3.5' : 'space-y-4 print:space-y-3.5'}>
           <ExperienceBlock experience={experience} theme={theme} />
           <ProjectsBlock projects={projects} theme={theme} />
           <AchievementsBlock achievements={achievements} theme={theme} />
         </div>
 
-        <div className={twoColumn ? 'sm:col-span-1 space-y-6' : 'space-y-6'}>
+        <div className={twoColumn ? 'sm:col-span-1 space-y-4 print:space-y-3.5' : 'space-y-4 print:space-y-3.5'}>
           <EducationBlock education={education} theme={theme} />
           <SkillsBlock skills={skills} theme={theme} />
           <CertificatesBlock certificates={certificates} theme={theme} />

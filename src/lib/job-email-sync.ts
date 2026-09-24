@@ -22,10 +22,10 @@ export function upsertJobFromEmail(
     const existingNormTitle = job.title.toLowerCase().replace(/[^a-z0-9]/g, '');
 
     const companyMatch =
-      existingNormCompany.includes(normCompany) || normCompany.includes(existingNormCompany);
+      normCompany.length > 2 && (existingNormCompany === normCompany || (existingNormCompany.length > 3 && normCompany.length > 3 && (existingNormCompany.includes(normCompany) || normCompany.includes(existingNormCompany))));
     
     const titleMatch =
-      existingNormTitle.includes(normTitle) || normTitle.includes(existingNormTitle) || normTitle === 'softwareengineer';
+      normTitle.length > 3 && (existingNormTitle === normTitle || (existingNormTitle.length > 4 && normTitle.length > 4 && existingNormTitle.includes(normTitle)));
 
     return companyMatch && titleMatch;
   });
@@ -34,7 +34,7 @@ export function upsertJobFromEmail(
   const nowIso = new Date().toISOString();
 
   const newEmailEvent: EmailEvent = {
-    id: `event-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+    id: `event-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     emailId: emailMeta.id,
     subject: emailMeta.subject,
     sender: emailMeta.sender,
@@ -118,7 +118,7 @@ export function upsertJobFromEmail(
     };
 
     const newJob: JobApplication = {
-      id: `job-email-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+      id: `job-email-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
       company: extracted.companyName,
       title: extracted.jobTitle,
       location: extracted.location || 'Remote',

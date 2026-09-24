@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import Image from 'next/image';
 import { Star, Sparkles, Quote } from 'lucide-react';
 
 const testimonials = [
@@ -86,9 +87,12 @@ export function Testimonials() {
               <div className="pt-6 border-t border-white/5 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   {/* Avatar image */}
-                  <img
+                  <Image
+                    unoptimized
                     src={item.avatar}
                     alt={item.name}
+                    width={48}
+                    height={48}
                     className="w-12 h-12 rounded-full object-cover border-2 border-indigo-500/40 group-hover:border-indigo-400 transition-colors shadow-md"
                   />
                   <div className="text-left">

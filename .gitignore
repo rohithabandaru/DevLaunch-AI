@@ -12,6 +12,9 @@
 
 # testing
 /coverage
+/playwright-report
+/test-results
+/scratch
 
 # next.js
 /.next/
@@ -33,17 +36,56 @@ yarn-error.log*
 # env files (NEVER commit secrets)
 .env
 .env.*
-!.env.example
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local
 .env*.local
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+*.env
+*.env.*
+!.env.example
+!.env.template
 
-# vercel
+# API keys, credentials, & service accounts (NEVER commit)
+*.key
+*.secret
+*.credentials
+credentials.json
+client_secret*.json
+service-account*.json
+google-services.json
+firebase-*.json
+*.pem
+*.crt
+*.cer
+*.der
+*.p12
+*.pfx
+*.keystore
+*.jks
+
+# Database files & local dumps with sensitive data
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.bak
+
+# Supabase CLI local generated files & secrets
+.supabase/
+supabase/.temp/
+supabase/seed.sql.bak
+
+# Generated Chrome extension configuration
+public/extension/config.js
+
+# Vercel
 .vercel
 
-# typescript
+# TypeScript
 *.tsbuildinfo
 next-env.d.ts
 
@@ -58,14 +100,3 @@ next-env.d.ts
 .DS_Store
 Thumbs.db
 Desktop.ini
-
-# API keys & secrets (safety net)
-*.key
-*.secret
-*.credentials
-service-account*.json
-
-# Supabase CLI local generated files & secrets
-.supabase/
-supabase/.temp/
-supabase/seed.sql.bak

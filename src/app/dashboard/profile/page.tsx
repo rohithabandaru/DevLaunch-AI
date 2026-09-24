@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
-import { User as UserIcon, Shield, Lock, Bell, Trash2, Check, Sparkles, AlertTriangle } from 'lucide-react';
+import Image from 'next/image';
+import { User as UserIcon, Lock, Trash2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/app-provider';
 
@@ -16,7 +17,6 @@ export default function ProfilePage() {
   const [twitter, setTwitter] = useState(user?.twitter || '');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
 
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +51,7 @@ export default function ProfilePage() {
         <div className="flex items-center gap-4 border-b border-white/10 pb-6">
           <div className="h-16 w-16 overflow-hidden rounded-2xl border border-white/20 bg-slate-900">
             {photo ? (
-              <img src={photo} alt={name} className="h-full w-full object-cover" />
+              <Image unoptimized src={photo} alt={name} width={64} height={64} className="h-full w-full object-cover" />
             ) : (
               <div className="flex h-full w-full items-center justify-center text-xl font-bold text-violet-300">
                 {name.slice(0, 2).toUpperCase() || 'US'}

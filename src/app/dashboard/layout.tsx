@@ -1,4 +1,5 @@
 import { Sidebar } from '@/components/layout/sidebar';
+import { SubscriptionGate } from '@/components/subscription/subscription-gate';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -6,7 +7,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="print:hidden">
         <Sidebar />
       </div>
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8 print:p-0 print:overflow-visible print:w-full">{children}</main>
+      <main className="flex-1 overflow-y-auto p-6 lg:p-8 print:p-0 print:overflow-visible print:w-full">
+        <SubscriptionGate>
+          {children}
+        </SubscriptionGate>
+      </main>
     </div>
   );
 }
+

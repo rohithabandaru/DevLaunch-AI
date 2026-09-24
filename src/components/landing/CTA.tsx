@@ -26,7 +26,7 @@ export function CTA() {
             </h2>
 
             <p className="text-gray-300 text-base sm:text-lg max-w-xl mx-auto font-normal">
-              Join over 100,000 developers building standout ATS resumes and portfolio websites with DevLaunch AI.
+              Build standout ATS resumes and portfolio websites in minutes with DevLaunch AI — designed for developers.
             </p>
 
             {/* Action Buttons */}

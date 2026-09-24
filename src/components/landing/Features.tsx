@@ -5,7 +5,6 @@ import {
   Globe,
   ShieldCheck,
   FileCheck,
-  Layers,
   Layout,
   ArrowUpRight,
   Kanban,

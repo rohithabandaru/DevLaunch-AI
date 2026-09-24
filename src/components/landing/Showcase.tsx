@@ -6,12 +6,8 @@ import {
   Globe,
   Sparkles,
   ExternalLink,
-  Award,
-  CheckCircle2,
   Code,
-  Layers,
   Terminal,
-  Cpu,
 } from 'lucide-react';
 
 export function Showcase() {

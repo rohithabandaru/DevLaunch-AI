@@ -648,7 +648,7 @@ function ExperienceList({ experience, t }: { experience: PortfolioData['experien
   return (
     <div className="space-y-4">
       {experience.map((exp, i) => (
-        <div key={i} className={`border-l-2 ${t.border} pl-4 space-y-1`}>
+        <div key={i} className={`border-l-2 ${t.border} pl-4 space-y-1 break-inside-avoid print:break-inside-avoid`}>
           <div className="flex flex-wrap justify-between gap-2 text-sm font-bold">
             <span className={t.heading}>{exp.role}</span>
             <span className={`text-xs ${t.accent}`}>{exp.period}</span>
@@ -666,7 +666,7 @@ function EducationList({ education, t }: { education: PortfolioData['education']
   return (
     <div className="space-y-3">
       {education.map((edu, i) => (
-        <div key={i} className={`${t.card} p-3 space-y-0.5`}>
+        <div key={i} className={`${t.card} p-3 space-y-0.5 break-inside-avoid print:break-inside-avoid`}>
           <div className={`text-xs font-semibold ${t.heading}`}>{edu.degree}</div>
           <p className={`text-xs ${t.muted}`}>
             {edu.school} ({edu.year})
@@ -682,7 +682,7 @@ function ServicesList({ services, t }: { services: PortfolioData['services']; t:
   return (
     <div className="space-y-3">
       {services.map((s, i) => (
-        <div key={i} className={`${t.card} p-3 space-y-1`}>
+        <div key={i} className={`${t.card} p-3 space-y-1 break-inside-avoid print:break-inside-avoid`}>
           <div className={`text-xs font-semibold ${t.heading}`}>{s.title}</div>
           <p className={`text-xs ${t.muted}`}>{s.description}</p>
         </div>
@@ -696,7 +696,7 @@ function CertsList({ certifications, t }: { certifications: PortfolioData['certi
   return (
     <div className="grid gap-3 sm:grid-cols-2">
       {certifications.map((cert, i) => (
-        <div key={i} className={`${t.card} p-3 text-xs`}>
+        <div key={i} className={`${t.card} p-3 text-xs break-inside-avoid print:break-inside-avoid`}>
           <div className={`font-bold ${t.heading}`}>{cert.name}</div>
           <div className={`mt-0.5 ${t.muted}`}>
             {cert.issuer} ({cert.year})
@@ -712,7 +712,7 @@ function TestimonialsList({ testimonials, t }: { testimonials: PortfolioData['te
   return (
     <div className="grid gap-4 sm:grid-cols-2">
       {testimonials.map((item, i) => (
-        <blockquote key={i} className={`${t.card} p-4 space-y-2`}>
+        <blockquote key={i} className={`${t.card} p-4 space-y-2 break-inside-avoid print:break-inside-avoid`}>
           <Quote className={`h-4 w-4 ${t.accent}`} />
           <p className={`text-xs leading-relaxed ${t.muted}`}>{item.content}</p>
           <footer className={`text-xs font-semibold ${t.heading}`}>
@@ -1357,22 +1357,30 @@ function LandingLayout({ data, t }: { data: PortfolioData; t: ThemeTokens }) {
 export function PortfolioThemeRenderer({ data, themeId }: { data: PortfolioData; themeId: string }) {
   const t = getTheme(themeId);
 
-  switch (t.layout) {
-    case 'swiss':
-      return <SwissLayout data={data} t={t} />;
-    case 'terminal':
-      return <TerminalLayout data={data} t={t} />;
-    case 'sidebar':
-      return <SidebarLayout data={data} t={t} />;
-    case 'magazine':
-      return <MagazineLayout data={data} t={t} />;
-    case 'split':
-      return <SplitLayout data={data} t={t} />;
-    case 'gallery':
-      return <GalleryLayout data={data} t={t} />;
-    case 'landing':
-      return <LandingLayout data={data} t={t} />;
-    default:
-      return <StackLayout data={data} t={t} />;
-  }
+  const renderLayout = () => {
+    switch (t.layout) {
+      case 'swiss':
+        return <SwissLayout data={data} t={t} />;
+      case 'terminal':
+        return <TerminalLayout data={data} t={t} />;
+      case 'sidebar':
+        return <SidebarLayout data={data} t={t} />;
+      case 'magazine':
+        return <MagazineLayout data={data} t={t} />;
+      case 'split':
+        return <SplitLayout data={data} t={t} />;
+      case 'gallery':
+        return <GalleryLayout data={data} t={t} />;
+      case 'landing':
+        return <LandingLayout data={data} t={t} />;
+      default:
+        return <StackLayout data={data} t={t} />;
+    }
+  };
+
+  return (
+    <div className="portfolio-theme-root print:w-full print:min-h-screen">
+      {renderLayout()}
+    </div>
+  );
 }

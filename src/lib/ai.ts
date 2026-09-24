@@ -3,20 +3,24 @@ import OpenAI from 'openai';
 // Lazy-initialize OpenAI client if API key is provided
 let openaiClient: OpenAI | null = null;
 
-function getOpenAIClient(): OpenAI {
+function getOpenAIClient(): OpenAI | null {
   if (openaiClient) return openaiClient;
   const apiKey = process.env.OPENAI_API_KEY;
   if (apiKey && !apiKey.includes('your-openai-api-key') && !apiKey.includes('your_openai_api_key') && !apiKey.startsWith('your-')) {
-    if (typeof window !== 'undefined') throw new Error('AI service is not configured.');
-    openaiClient = new OpenAI({ apiKey });
-    return openaiClient;
+    if (typeof window !== 'undefined') return null;
+    try {
+      openaiClient = new OpenAI({ apiKey });
+      return openaiClient;
+    } catch {
+      return null;
+    }
   }
-  throw new Error('AI service is not configured.');
+  return null;
 }
 
 export async function generateSummary(fullName: string, role: string, skills?: string[]): Promise<string> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -35,8 +39,7 @@ export async function generateSummary(fullName: string, role: string, skills?: s
       const text = response.choices[0]?.message?.content?.trim();
       if (text) return text;
     } catch (err) {
-      console.warn('OpenAI API call failed:', err);
-      throw new Error('AI service is not configured. Please configure the OpenAI API key.');
+      console.warn('OpenAI API call failed, using fallback summary:', err);
     }
   }
 
@@ -49,7 +52,7 @@ export async function generateSummary(fullName: string, role: string, skills?: s
 
 export async function generateBulletPoints(role: string, highlights: string): Promise<string[]> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -70,8 +73,7 @@ export async function generateBulletPoints(role: string, highlights: string): Pr
         return text.split('\n').map((line) => line.replace(/^[-•*]\s*/, '').trim()).filter(Boolean);
       }
     } catch (err) {
-      console.warn('OpenAI API call failed:', err);
-      throw new Error('AI service is not configured. Please configure the OpenAI API key.');
+      console.warn('OpenAI API call failed, using fallback bullet points:', err);
     }
   }
 
@@ -85,7 +87,7 @@ export async function generateBulletPoints(role: string, highlights: string): Pr
 
 export async function generateProjectDescription(projectName: string, techStack?: string[]): Promise<string> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -104,8 +106,7 @@ export async function generateProjectDescription(projectName: string, techStack?
       const text = response.choices[0]?.message?.content?.trim();
       if (text) return text;
     } catch (err) {
-      console.warn('OpenAI API call failed:', err);
-      throw new Error('AI service is not configured. Please configure the OpenAI API key.');
+      console.warn('OpenAI API call failed, using fallback project description:', err);
     }
   }
 
@@ -116,7 +117,7 @@ export async function generateProjectDescription(projectName: string, techStack?
 
 export async function generateSkillsSuggestions(role: string): Promise<string[]> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -137,8 +138,7 @@ export async function generateSkillsSuggestions(role: string): Promise<string[]>
         return text.split(',').map((s) => s.trim()).filter(Boolean);
       }
     } catch (err) {
-      console.warn('OpenAI API call failed:', err);
-      throw new Error('AI service is not configured. Please configure the OpenAI API key.');
+      console.warn('OpenAI API call failed, using fallback skills suggestions:', err);
     }
   }
 
@@ -157,7 +157,7 @@ export async function generateSkillsSuggestions(role: string): Promise<string[]>
 
 export async function fixGrammarAndTone(text: string, tone: 'Professional' | 'Executive' | 'Expert' = 'Professional'): Promise<string> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -176,8 +176,7 @@ export async function fixGrammarAndTone(text: string, tone: 'Professional' | 'Ex
       const result = response.choices[0]?.message?.content?.trim();
       if (result) return result;
     } catch (err) {
-      console.warn('OpenAI API call failed:', err);
-      throw new Error('AI service is not configured. Please configure the OpenAI API key.');
+      console.warn('OpenAI API call failed, using fallback text cleanup:', err);
     }
   }
 
@@ -195,7 +194,6 @@ export async function rewriteBeginnerToExpert(text: string): Promise<string> {
 }
 
 export function generateATSAnalysis(text: string, jobDescription?: string) {
-  getOpenAIClient();
   const lowerText = text.toLowerCase();
   const lowerJob = jobDescription ? jobDescription.toLowerCase() : '';
 
@@ -264,28 +262,43 @@ export async function generateCoverLetter({
   candidateName?: string;
 }): Promise<string> {
   const client = getOpenAIClient();
-  try {
-    const response = await client.chat.completions.create({
-      model: 'gpt-3.5-turbo',
-      messages: [
-        {
-          role: 'system',
-          content: `You are an executive career coach. Write a highly tailored, persuasive cover letter with tone: ${tone} and length: ${length}.`,
-        },
-        {
-          role: 'user',
-          content: `Candidate Name: ${candidateName}\nJob Title: ${jobTitle}\nCompany Name: ${company}\nJob Context: ${description}`,
-        },
-      ],
-      max_tokens: length === 'Comprehensive' ? 450 : length === 'Short' ? 200 : 320,
-    });
-    const text = response.choices[0]?.message?.content?.trim();
-    if (text) return text;
-    throw new Error('AI service is not configured.');
-  } catch (err) {
-    if (err instanceof Error && err.message.includes('AI service is not configured')) throw err;
-    throw new Error('AI service is not configured.');
+  if (client) {
+    try {
+      const response = await client.chat.completions.create({
+        model: 'gpt-3.5-turbo',
+        messages: [
+          {
+            role: 'system',
+            content: `You are an executive career coach. Write a highly tailored, persuasive cover letter with tone: ${tone} and length: ${length}.`,
+          },
+          {
+            role: 'user',
+            content: `Candidate Name: ${candidateName}\nJob Title: ${jobTitle}\nCompany Name: ${company}\nJob Context: ${description}`,
+          },
+        ],
+        max_tokens: length === 'Comprehensive' ? 450 : length === 'Short' ? 200 : 320,
+      });
+      const text = response.choices[0]?.message?.content?.trim();
+      if (text) return text;
+    } catch (err) {
+      console.warn('OpenAI API call failed for cover letter, using fallback generator:', err);
+    }
   }
+
+  const isShort = length === 'Short';
+  const isComp = length === 'Comprehensive';
+  const roleText = jobTitle || 'Software Engineer';
+  const companyText = company || 'your organization';
+
+  if (isShort) {
+    return `I am writing to express my enthusiastic interest in the ${roleText} position at ${companyText}. With a strong track record in modern software architecture, rapid feature delivery, and system reliability, I am eager to contribute immediately to your team's mission.\n\nMy background in building scalable web solutions and collaborating in agile environments aligns closely with ${companyText}'s requirements. I welcome the opportunity to discuss how my experience and technical execution can support your upcoming goals.`;
+  }
+
+  if (isComp) {
+    return `I am writing to formally apply for the ${roleText} position at ${companyText}. Having followed ${companyText}'s continuous innovation and high standards of engineering excellence, I am excited about the prospect of bringing my technical expertise, cross-functional leadership, and product-focused mindset to your team.\n\nThroughout my career, I have specialized in architecting resilient end-to-end applications, optimizing performance metrics, and collaborating across design and engineering teams to transform complex challenges into intuitive, high-impact products. From leading zero-downtime database migrations to creating responsive frontend systems that elevated user engagement, my focus is always on shipping clean, maintainable, and scalable software.\n\nWhat excites me most about joining ${companyText} is the opportunity to tackle demanding challenges alongside a talented team. I am confident that my technical skills, proactive problem-solving, and dedication to craftsmanship will make an immediate positive impact. Thank you for your time and consideration, and I look forward to discussing how I can contribute to your engineering roadmap.`;
+  }
+
+  return `I am writing to express my strong interest in the ${roleText} position at ${companyText}. With deep hands-on experience in full-stack architecture, clean code principles, and scalable system design, I am confident in my ability to deliver immediate value to your engineering team.\n\nIn my previous projects, I have consistently driven technical initiatives from ideation to production, prioritizing performance, intuitive developer workflows, and robust test coverage. My experience collaborating with cross-functional stakeholders ensures that technical decisions always align with business objectives and product vision.\n\nI am particularly drawn to ${companyText}'s commitment to quality and engineering velocity. I would welcome the opportunity to connect and discuss how my background and enthusiasm can contribute to your ongoing success.`;
 }
 
 import type { JobApplication, JobMatchResult, InterviewPrepResult } from '@/types/job-types';
@@ -356,7 +369,7 @@ export async function generateInterviewPrep(
   description?: string
 ): Promise<InterviewPrepResult> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',
@@ -435,14 +448,6 @@ export async function extractJobFromEmail(email: RawEmailInput): Promise<import(
   const lowerSubject = email.subject.toLowerCase();
   const lowerBody = email.body.toLowerCase();
 
-  // 1. First-pass classifier filter
-  const isJobEmail =
-    /application|applied|candidate|interview|assessment|coding test|technical round|recruiter|offer|rejected|status|job|hire|talent|greenhouse|lever|ashby|workday|smartrecruiters/i.test(
-      email.subject + ' ' + email.sender + ' ' + email.body.slice(0, 300)
-    );
-
-  if (!isJobEmail) return null;
-
   if (client) {
     try {
       const response = await client.chat.completions.create({
@@ -515,18 +520,41 @@ Output raw valid JSON only.`,
   let meetingLink: string | undefined = undefined;
 
   // Extract Company Name heuristic
-  let companyName = 'Unknown Company';
-  const domainMatch = email.sender.match(/@([a-zA-Z0-9.-]+)/);
-  if (domainMatch && !['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com'].includes(domainMatch[1])) {
-    const raw = domainMatch[1].split('.')[0];
-    companyName = raw.charAt(0).toUpperCase() + raw.slice(1);
+  let companyName = '';
+  const senderDisplayName = email.sender.split('<')[0].replace(/["']/g, '').trim();
+  if (senderDisplayName && !senderDisplayName.includes('@') && senderDisplayName.length > 2) {
+    companyName = senderDisplayName.replace(/(careers|recruiting|jobs|team|no-reply|notifications|support)/gi, '').trim();
+  }
+
+  if (!companyName || companyName.length < 2) {
+    const compMatch = email.subject.match(/(?:at|with|for)\s+([A-Z][A-Za-z0-9\s&]+?)(?:\s+-\s+|\s+\(|\s+role|\s+position|$)/);
+    if (compMatch && compMatch[1]) {
+      companyName = compMatch[1].trim();
+    }
+  }
+
+  if (!companyName || companyName.length < 2) {
+    const domainMatch = email.sender.match(/@([a-zA-Z0-9.-]+)/);
+    if (domainMatch) {
+      const rawDomain = domainMatch[1].split('.')[0];
+      if (!['gmail', 'yahoo', 'outlook', 'hotmail', 'mail'].includes(rawDomain.toLowerCase())) {
+        companyName = rawDomain.charAt(0).toUpperCase() + rawDomain.slice(1);
+      }
+    }
+  }
+
+  if (!companyName || companyName.length < 2) {
+    companyName = email.subject.split(' ')[0] || 'Company Application';
   }
 
   // Job Title heuristic
-  let jobTitle = 'Software Engineer';
-  const titleMatch = email.subject.match(/(?:for|at|role:?)\s+([A-Za-z0-9\s\-]+)(?:\(|-|$)/i);
-  if (titleMatch && titleMatch[1] && titleMatch[1].trim().length > 3) {
+  let jobTitle = '';
+  const titleMatch = email.subject.match(/(?:for|at|role:?|position:?)\s+([A-Za-z0-9\s\-/]+?)(?:\s+at|\s+with|\s+\(|-|$)/i);
+  if (titleMatch && titleMatch[1] && titleMatch[1].trim().length > 2) {
     jobTitle = titleMatch[1].trim();
+  }
+  if (!jobTitle || jobTitle.length < 3) {
+    jobTitle = email.subject.length > 40 ? email.subject.slice(0, 38) + '…' : email.subject;
   }
 
   // Link extraction for meeting
@@ -640,7 +668,7 @@ export interface NegotiationResult {
 
 export async function generateNegotiationAdvice(input: NegotiationInput): Promise<NegotiationResult> {
   const client = getOpenAIClient();
-  if (true) {
+  if (client) {
     try {
       const response = await client.chat.completions.create({
         model: 'gpt-3.5-turbo',

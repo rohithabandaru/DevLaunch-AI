@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Wand2, Copy, Download, Check, Sparkles, FileText, Plus, Trash2, AlertCircle } from 'lucide-react';
+import { Wand2, Copy, Check, Sparkles, FileText, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateCoverLetter } from '@/lib/ai';
 import { useAuth } from '@/components/providers/app-provider';
+import { isProUser, canUse, consume } from '@/lib/plan-limits';
+import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
 
 export default function CoverLetterPage() {
   const { user } = useAuth();
@@ -19,16 +21,22 @@ export default function CoverLetterPage() {
   const [tone, setTone] = useState('Professional');
   const [length, setLength] = useState('Medium');
   const [salutation, setSalutation] = useState('Dear Hiring Manager');
-  const [signOff, setSignOff] = useState('Sincerely');
+  const [signOff] = useState('Sincerely');
   const [content, setContent] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState('');
+  const [limitReached, setLimitReached] = useState(false);
 
   const handleGenerate = async () => {
     setIsGenerating(true);
     setError('');
     try {
+      if (!isProUser() && !canUse('aiGenerations').allowed) {
+        setLimitReached(true);
+        setError('Free plan limit reached. Upgrade to Pro for unlimited AI cover letters.');
+        return;
+      }
       const enrichedContext = `${jobDescription}\nCandidate Strengths: ${keyStrengths}\nAvailability: ${noticePeriod}\nValues Alignment: ${cultureFitNotes}`;
       const candidateName = user?.name || 'Alex Morgan';
       const result = await generateCoverLetter({
@@ -46,6 +54,7 @@ export default function CoverLetterPage() {
         .trim();
       const formatted = `${salutation} at ${company || 'the hiring team'},\n\n${body}\n\n${signOff},\n${candidateName}`;
       setContent(formatted);
+      if (!isProUser()) consume('aiGenerations');
     } catch (err) {
       console.error('Cover letter generation failed:', err);
       setError('Failed to generate cover letter. Using fallback template.');
@@ -80,6 +89,14 @@ export default function CoverLetterPage() {
           <Sparkles className="mr-1.5 h-4 w-4" /> {isGenerating ? 'AI Writing Letter...' : 'Generate Letter'}
         </Button>
       </div>
+
+      {/* Free plan quota banner */}
+      {limitReached && (
+        <UpgradePrompt
+          message="You have used all your free AI generations. Upgrade to Pro for unlimited AI cover letters, resumes, and ATS tools."
+          ctaLabel="Upgrade to Pro"
+        />
+      )}
 
       {/* Grid Inputs & Output */}
       <div className="grid gap-6 xl:grid-cols-12">

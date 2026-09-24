@@ -146,15 +146,113 @@
 
 /* Print Styles */
 @media print {
+  @page {
+    size: A4 portrait;
+    margin: 0 !important;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    min-height: 100% !important;
+    background-color: #020617 !important;
+  }
+
+  body:has(#resume-print-area) {
+    background-color: #ffffff !important;
+  }
+
   /* Force background colors/images to print (essential for glassmorphism/Tailwind) */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
 
-  /* Remove browser headers and footers (date, URL, etc) */
-  @page {
-    margin: 0;
-    size: A4;
+  /* Hide UI elements during print */
+  .print\:hidden {
+    display: none !important;
+  }
+
+  /* Clean print layout container */
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    width: 100% !important;
+    background: transparent !important;
+  }
+
+  /* Prevent awkward page breaks across sections and headers */
+  section,
+  article,
+  header,
+  .break-inside-avoid,
+  .print\:break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  .break-after-avoid,
+  .print\:break-after-avoid {
+    break-after: avoid !important;
+    page-break-after: avoid !important;
+  }
+
+  /* Prevent trailing orphan lines or splitting cards */
+  p,
+  li,
+  div {
+    orphans: 3;
+    widows: 3;
+  }
+
+  /* Ensure resume container takes full width cleanly without cutoffs and has generous internal breathing room */
+  #resume-print-area {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+  }
+
+  #resume-print-area > div {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    max-width: 100% !important;
+    padding: 12mm 16mm !important;
+    margin: 0 auto !important;
+    box-sizing: border-box !important;
+    background: #ffffff !important;
+  }
+
+  /* Ensure portfolio print container fills 100% page width and height without white margins */
+  #portfolio-print-area,
+  .portfolio-theme-root {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100vh !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    border: none !important;
+  }
+
+  #portfolio-print-area > div,
+  .portfolio-theme-root > div {
+    box-shadow: none !important;
+    border: none !important;
+    border-radius: 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 100vh !important;
+    box-sizing: border-box !important;
   }
 }

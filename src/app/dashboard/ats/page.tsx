@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { ShieldCheck, Upload, FileText, CheckCircle2, AlertTriangle, Wand2, RefreshCw, BarChart2 } from 'lucide-react';
+import { ShieldCheck, FileText, CheckCircle2, AlertTriangle, Wand2, BarChart2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateATSAnalysis } from '@/lib/ai';
 
