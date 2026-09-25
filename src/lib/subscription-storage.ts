@@ -98,37 +98,34 @@ export function isProMember(): boolean {
 /** Check if the user's subscription/trial period has expired */
 export function isSubscriptionExpired(): boolean {
   const sub = getActiveSubscription();
-  // Default free users who never started a trial — treat as needing a trial
-  if (sub.tier === 'FREE' && sub.status === 'active' && sub.planId === 'free') {
-    return false; // Not expired yet, but SubscriptionGate will auto-start trial
+  
+  // Strict Paywall: If user is on FREE tier, they must pay to access the app.
+  if (sub.tier === 'FREE') {
+    return true; 
   }
+
   // If status is already canceled and period has ended
   if (sub.status === 'canceled') {
     return new Date(sub.currentPeriodEnd) < new Date();
   }
-  // For free-tier users with a real trial end date
-  if (sub.tier === 'FREE' && sub.status === 'trialing') {
-    return new Date(sub.currentPeriodEnd) < new Date();
-  }
+  
   // Active paid subscriptions that have expired
-  if (sub.tier !== 'FREE' && new Date(sub.currentPeriodEnd) < new Date()) {
+  if (new Date(sub.currentPeriodEnd) < new Date()) {
     return true;
   }
+  
   return false;
 }
 
 /** Check if the user has a valid (non-expired) subscription that grants dashboard access */
 export function isSubscriptionValid(): boolean {
   const sub = getActiveSubscription();
-  // Paid users with active subscription
+  
+  // Strict Paywall: Paid users with active subscription only
   if ((sub.tier === 'PRO' || sub.tier === 'ENTERPRISE') && sub.status === 'active') {
     return new Date(sub.currentPeriodEnd) >= new Date();
   }
-  // Free trial users still within trial window
-  if (sub.tier === 'FREE' && sub.status === 'trialing') {
-    return new Date(sub.currentPeriodEnd) >= new Date();
-  }
-  // NO perpetual free access — trial must be active or user must pay
+  
   return false;
 }
 

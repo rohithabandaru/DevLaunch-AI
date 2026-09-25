@@ -122,10 +122,10 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                 <AlertTriangle className="h-3.5 w-3.5" /> Subscription Expired
               </span>
               <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Your Free Trial Has Ended
+                Unlock Premium Access
               </h1>
               <p className="text-sm text-slate-400 max-w-lg mx-auto leading-relaxed">
-                To continue using AI Job Sync, ATS Optimization, Resume Builder, and all premium features, please choose a plan below.
+                To access AI Job Sync, ATS Optimization, Resume Builder, and all premium features, please choose a plan below.
               </p>
             </div>
           </div>
