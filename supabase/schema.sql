@@ -327,6 +327,47 @@ CREATE POLICY "Owners can view portfolio events"
         )
     );
 
+-- 9. EMAIL CONNECTIONS (server-side, encrypted-at-rest mailbox OAuth tokens)
+-- Supports the "AI Email Sync Engine": OAuth tokens are encrypted with
+-- AES-256-GCM (EMAIL_ENCRYPTION_KEY) by server code and never touch the browser.
+-- See supabase/migrations/0002_email_connections.sql for the full rationale.
+CREATE TABLE IF NOT EXISTS public.email_connections (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    provider TEXT NOT NULL CHECK (provider IN ('gmail', 'outlook')),
+    mailbox_email TEXT NOT NULL,
+    access_token_encrypted TEXT NOT NULL,
+    refresh_token_encrypted TEXT,
+    token_expires_at TIMESTAMPTZ,
+    scopes TEXT,
+    auto_sync BOOLEAN NOT NULL DEFAULT TRUE,
+    status TEXT NOT NULL DEFAULT 'connected'
+        CHECK (status IN ('connected', 'error', 'disconnected')),
+    last_synced_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT timezone('utc'::text, now()),
+    UNIQUE (user_id, provider)
+);
+
+ALTER TABLE public.email_connections ENABLE ROW LEVEL SECURITY;
+
+-- No owner SELECT policy on purpose: the token columns are credentials and the
+-- app only ever reads this table through the service role
+-- (/api/email/connections), which projects them away. Owners may still delete
+-- their own row. There is no INSERT/UPDATE policy, so connections are only ever
+-- created, refreshed and updated by server code.
+CREATE POLICY "email_connections owner delete"
+    ON public.email_connections FOR DELETE
+    USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_email_connections_user
+    ON public.email_connections (user_id);
+
+DROP TRIGGER IF EXISTS email_connections_updated_at ON public.email_connections;
+CREATE TRIGGER email_connections_updated_at
+    BEFORE UPDATE ON public.email_connections
+    FOR EACH ROW EXECUTE FUNCTION public.touch_email_connections_updated_at();
+
 -- Auto-touch updated_at on portfolios
 CREATE OR REPLACE FUNCTION public.touch_portfolio_updated_at()
 RETURNS TRIGGER AS $$

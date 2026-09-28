@@ -40,8 +40,15 @@ import { analyzeJobMatch, generateInterviewPrep, extractJobFromEmail, generateFo
 import type { NegotiationResult } from '@/lib/ai';
 import { upsertJobFromEmail } from '@/lib/job-email-sync';
 import { EmailSyncModal } from '@/components/jobs/email-sync-modal';
-import { buildGoogleOAuthUrl, fetchGoogleUserProfile, fetchRealGmailMessages } from '@/lib/gmail-sync';
-import type { JobApplication, JobStatus, WorkplaceType, EmailConnection, EmailProvider } from '@/types/job-types';
+import {
+  disconnectEmailConnection,
+  fetchEmailConnections,
+  parseSyncStatus,
+  setEmailConnectionAutoSync,
+  syncGmailMailbox,
+  SYNC_STATUS_MESSAGES,
+} from '@/lib/email-sync-client';
+import type { JobApplication, JobStatus, WorkplaceType, EmailConnection } from '@/types/job-types';
 import { fetchJobs, insertJob, updateJob, deleteJob } from '@/lib/supabase-jobs';
 import { isProUser, FREE_LIMITS } from '@/lib/plan-limits';
 import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
@@ -150,6 +157,10 @@ export default function JobTrackerPage() {
 
   useEffect(() => {
     const userId = currentUser?.id || '';
+    // Wait for auth to resolve: a blank id is not a valid uuid, so querying with
+    // it would only produce a Postgres error. The effect re-runs once the user
+    // lands, and `isLoadingJobs` stays true until then.
+    if (!userId) return;
     fetchJobs(userId)
       .then(data => {
         if (data && data.length > 0) {
@@ -187,23 +198,28 @@ export default function JobTrackerPage() {
   const [detailJob, setDetailJob] = useState<JobApplication | null>(null);
   // Mounted check for safe hydration
   const isMounted = useSyncExternalStore(
-    () => () => {},
+    () => () => { },
     () => true,
     () => false
   );
 
   // Email Integration States
-  const [emailConnections, setEmailConnections] = useState<EmailConnection[]>(() =>
-    readStorage<EmailConnection[]>('emailConnections', [])
-  );
+  // The server is the single source of truth for mailbox connections: nothing
+  // about a connection (least of all an OAuth token) is kept in localStorage.
+  const [emailConnections, setEmailConnections] = useState<EmailConnection[]>([]);
+  // A failed load is NOT the same as "no mailbox connected": conflating the two
+  // makes a server misconfiguration look like an empty account. Kept apart so
+  // the UI can say which one it is.
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncToastMessage, setSyncToastMessage] = useState<string | null>(null);
+  const [syncErrorMessage, setSyncErrorMessage] = useState<string | null>(null);
   // Detail Modal Tab & AI analysis states
   const [detailTab, setDetailTab] = useState<'overview' | 'ai-match' | 'ai-prep'>('overview');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPrepping, setIsPrepping] = useState(false);
-  
+
   // Follow-Up Email & Calendar states
   const [followUpEmailText, setFollowUpEmailText] = useState('');
   const [isGeneratingFollowUp, setIsGeneratingFollowUp] = useState(false);
@@ -236,212 +252,154 @@ export default function JobTrackerPage() {
     notes: '',
     tags: '',
   });
-  const updateConnectionsStorage = (nextCons: EmailConnection[]) => {
-    setEmailConnections(nextCons);
-    writeStorage('emailConnections', nextCons);
+  const showSyncToast = (message: string) => {
+    setSyncErrorMessage(null);
+    setSyncToastMessage(message);
+    setTimeout(() => setSyncToastMessage(null), 5000);
   };
 
-  const saveEmailConnection = (provider: EmailProvider, targetEmail: string) => {
-    const newConnection: EmailConnection = {
-      id: crypto.randomUUID(),
-      provider,
-      email: targetEmail,
-      connectedAt: new Date().toISOString(),
-      lastSyncedAt: new Date().toISOString(),
-      autoSync: true,
-      status: 'connected',
-    };
-    const nextCons = [...emailConnections.filter((c) => c.provider !== provider), newConnection];
-    updateConnectionsStorage(nextCons);
+  const showSyncError = (message: string) => {
+    setSyncToastMessage(null);
+    setSyncErrorMessage(message);
+    setTimeout(() => setSyncErrorMessage(null), 9000);
   };
 
+  // Hydrate connections from the server, and report how the OAuth round trip
+  // ended when the callback redirects back to this page.
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hash = window.location.hash;
-      if (hash && hash.includes('access_token=')) {
-        const params = new URLSearchParams(hash.replace('#', '?'));
-        const token = params.get('access_token');
-        if (token) {
-          localStorage.setItem('gmail_token', token);
-          sessionStorage.setItem('gmail_token', token);
-          window.history.replaceState(null, '', window.location.pathname);
-          fetchGoogleUserProfile(token).then((profile) => {
-            setIsSyncing(true);
-            const userEmail = profile?.email || currentUser?.email || '';
-            saveEmailConnection('gmail', userEmail);
-            fetchRealGmailMessages(token).then(async (realMsgs) => {
-              if (realMsgs.length > 0) {
-                let currentJobs = [...jobs];
-                for (const msg of realMsgs) {
-                  const extracted = await extractJobFromEmail(msg);
-                  if (extracted) {
-                    const { updatedJobs } = upsertJobFromEmail(currentJobs, extracted, {
-                      id: msg.id,
-                      subject: msg.subject,
-                      sender: msg.sender,
-                      receivedAt: msg.date,
-                    });
-                    currentJobs = updatedJobs;
-                  }
-                }
-                setJobs(currentJobs);
-                writeStorage('jobs_backup', currentJobs);
-                setSyncToastMessage(`✓ Google OAuth Connected! Real Gmail Inbox Synced (${realMsgs.length} emails scanned) for ${userEmail}`);
-              } else {
-                setSyncToastMessage(`✓ Connected to Google Account (${userEmail}). Scanning Gmail inbox...`);
-              }
-              setTimeout(() => setSyncToastMessage(null), 6000);
-              setIsSyncing(false);
-            }).catch((err) => {
-              console.error('Gmail sync error:', err);
-              if (err?.message === 'GMAIL_API_DISABLED') {
-                setSyncToastMessage('⚠️ Gmail API is not enabled yet in your Google Cloud Console project. Please enable Gmail API at console.cloud.google.com/apis/library/gmail.googleapis.com');
-              }
-              setIsSyncing(false);
-            });
-          });
-        }
+    let cancelled = false;
+
+    const reportOAuthResult = () => {
+      const params = new URLSearchParams(window.location.search);
+      const status = parseSyncStatus(params.get('email_sync'));
+      if (!status) return;
+
+      if (status === 'connected') {
+        showSyncToast(SYNC_STATUS_MESSAGES.connected);
+      } else {
+        showSyncError(SYNC_STATUS_MESSAGES[status]);
       }
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+
+      params.delete('email_sync');
+      const query = params.toString();
+      window.history.replaceState(null, '', query ? `${window.location.pathname}?${query}` : window.location.pathname);
+    };
+
+    const loadConnections = async () => {
+      try {
+        const connections = await fetchEmailConnections();
+        if (cancelled) return;
+        setEmailConnections(connections);
+        setConnectionsError(null);
+      } catch (error) {
+        if (cancelled) return;
+        setConnectionsError(
+          error instanceof Error ? error.message : 'Could not load mailbox connections.'
+        );
+      }
+    };
+
+    reportOAuthResult();
+    void loadConnections();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Connect Email Handler
-  const handleConnectProvider = (provider: EmailProvider, targetEmail?: string) => {
-    if (provider === 'gmail' && typeof window !== 'undefined') {
-      const oauthUrl = buildGoogleOAuthUrl();
-      router.push(oauthUrl);
-      return;
-    }
-
-    const emailToUse = targetEmail && targetEmail.trim() ? targetEmail.trim() : '';
-    saveEmailConnection(provider, emailToUse);
-    
-    // Trigger initial mailbox sync in background
-    triggerMailboxSync(emailConnections).catch((err) => {
-      console.error('Background sync after connect failed:', err);
-    });
-  };
-
   // Disconnect Handler
-  const handleDisconnectProvider = (id: string) => {
-    const nextCons = emailConnections.filter((c) => c.id !== id);
-    updateConnectionsStorage(nextCons);
+  const handleDisconnectProvider = async (id: string) => {
+    setEmailConnections((current) => current.filter((c) => c.id !== id));
+    try {
+      await disconnectEmailConnection(id);
+      showSyncToast('Mailbox disconnected. The stored tokens were deleted and revoked at Google.');
+    } catch (error) {
+      showSyncError(error instanceof Error ? error.message : 'Could not disconnect the mailbox.');
+      try {
+        setEmailConnections(await fetchEmailConnections());
+      } catch {
+        // Keep the optimistic state; the error toast already explains.
+      }
+    }
   };
 
   // Toggle Auto Sync Handler
-  const handleToggleAutoSync = (id: string) => {
-    const nextCons = emailConnections.map((c) => (c.id === id ? { ...c, autoSync: !c.autoSync } : c));
-    updateConnectionsStorage(nextCons);
+  const handleToggleAutoSync = async (id: string) => {
+    const connection = emailConnections.find((c) => c.id === id);
+    if (!connection) return;
+    const nextAutoSync = !connection.autoSync;
+
+    setEmailConnections((current) => current.map((c) => (c.id === id ? { ...c, autoSync: nextAutoSync } : c)));
+    try {
+      await setEmailConnectionAutoSync(id, nextAutoSync);
+    } catch (error) {
+      setEmailConnections((current) => current.map((c) => (c.id === id ? { ...c, autoSync: !nextAutoSync } : c)));
+      showSyncError(error instanceof Error ? error.message : 'Could not update auto-sync.');
+    }
   };
 
-  const triggerMailboxSync = async (activeConnections = emailConnections) => {
-    const storedToken = typeof window !== 'undefined' ? (localStorage.getItem('gmail_token') || sessionStorage.getItem('gmail_token')) : null;
+  const triggerMailboxSync = async () => {
+    if (isSyncing) return;
 
-    if (!storedToken && typeof window !== 'undefined') {
-      window.location.href = buildGoogleOAuthUrl();
+    const connection = emailConnections.find((c) => c.provider === 'gmail');
+    if (!connection) {
+      // Nothing to read. Send the user to the connect flow instead of silently
+      // reporting an empty sync.
+      setIsEmailModalOpen(true);
+      showSyncError('No mailbox is connected yet. Connect Gmail to sync your job emails.');
       return;
-    }
-    let consToUse = activeConnections;
-    if (consToUse.length === 0) {
-      const emailToUse = currentUser?.email || '';
-      const autoCon: EmailConnection = {
-        id: crypto.randomUUID(),
-        provider: 'gmail',
-        email: emailToUse,
-        connectedAt: new Date().toISOString(),
-        lastSyncedAt: new Date().toISOString(),
-        autoSync: true,
-        status: 'connected',
-      };
-      consToUse = [autoCon];
-      updateConnectionsStorage(consToUse);
     }
 
     setIsSyncing(true);
     try {
-      if (storedToken) {
-        const realMsgs = await fetchRealGmailMessages(storedToken);
-        if (realMsgs.length > 0) {
-          let currentJobs = [...jobs];
-          for (const msg of realMsgs) {
-            const extracted = await extractJobFromEmail(msg);
-            if (extracted) {
-              const { updatedJobs } = upsertJobFromEmail(currentJobs, extracted, {
-                id: msg.id,
-                subject: msg.subject,
-                sender: msg.sender,
-                receivedAt: msg.date,
-              });
-              currentJobs = updatedJobs;
-            }
-          }
-          setJobs(currentJobs);
-          writeStorage('jobs_backup', currentJobs);
-          setSyncToastMessage(`✓ Deep scanned ${realMsgs.length} emails from ${consToUse[0]?.email || 'your Gmail inbox'}!`);
-          setTimeout(() => setSyncToastMessage(null), 5000);
-          return;
-        }
+      const { messages, mailboxEmail } = await syncGmailMailbox();
+
+      if (messages.length === 0) {
+        showSyncToast(`No recent job emails found in ${mailboxEmail}. Nothing was changed.`);
+        return;
       }
 
-      await new Promise((res) => setTimeout(res, 800));
-
-      const sampleEmails = [
-        {
-          id: `msg-${Date.now()}-1`,
-          sender: 'careers@openai.com',
-          subject: 'Technical Interview Invitation: AI Systems Engineer at OpenAI',
-          date: new Date().toISOString(),
-          body: 'Hi! We reviewed your application for AI Systems Engineer at OpenAI and would love to invite you for a 45-minute technical screen next Tuesday at 10 AM PST.',
-        },
-        {
-          id: `msg-${Date.now()}-2`,
-          sender: 'recruiting@figma.com',
-          subject: 'Application Received: Senior Frontend Lead at Figma',
-          date: new Date().toISOString(),
-          body: 'Thank you for applying for Senior Frontend Lead at Figma. We have received your application and resume. Our hiring team will review it shortly.',
-        },
-        {
-          id: `msg-${Date.now()}-3`,
-          sender: 'careers@stripe.com',
-          subject: 'Technical Interview Confirmation: Senior Frontend Engineer at Stripe',
-          date: new Date().toISOString(),
-          body: 'Hi! We reviewed your application for Senior Frontend Engineer at Stripe and confirmed your technical interview stage.',
-        },
-      ];
-
-      let currentJobsList = [...jobs];
-      for (const email of sampleEmails) {
-        try {
-          const extracted = await extractJobFromEmail(email);
-          if (extracted) {
-            const { updatedJobs } = upsertJobFromEmail(currentJobsList, extracted, {
-              id: email.id,
-              subject: email.subject,
-              sender: email.sender,
-              receivedAt: email.date,
-            });
-            currentJobsList = updatedJobs;
-          }
-        } catch (emailErr) {
-          console.warn('Email parse error for:', email.subject, emailErr);
-        }
+      let currentJobs = [...jobs];
+      let applied = 0;
+      for (const message of messages) {
+        const extracted = await extractJobFromEmail(message);
+        if (!extracted) continue;
+        const { updatedJobs } = upsertJobFromEmail(currentJobs, extracted, {
+          id: message.id,
+          subject: message.subject,
+          sender: message.sender,
+          receivedAt: message.date,
+        });
+        currentJobs = updatedJobs;
+        applied += 1;
       }
 
-      setJobs(currentJobsList);
-      writeStorage('jobs_backup', currentJobsList);
+      if (applied > 0) {
+        setJobs(currentJobs);
+        writeStorage('jobs_backup', currentJobs);
+      }
 
-      const updatedConnections = consToUse.map((c) => ({
-        ...c,
-        lastSyncedAt: new Date().toISOString(),
-      }));
-      updateConnectionsStorage(updatedConnections);
+      setEmailConnections((current) =>
+        current.map((c) =>
+          c.id === connection.id
+            ? { ...c, lastSyncedAt: new Date().toISOString(), status: 'connected' }
+            : c
+        )
+      );
 
-      const syncedEmail = consToUse[0]?.email || 'your email';
-      setSyncToastMessage(`✓ Mailbox synced successfully! Scanned job emails for ${syncedEmail}`);
-      setTimeout(() => setSyncToastMessage(null), 5000);
-    } catch (err) {
-      console.error('Mailbox sync error:', err);
+      if (applied === 0) {
+        showSyncToast(
+          `Scanned ${messages.length} emails from ${mailboxEmail}, but none looked like a job application.`
+        );
+      } else {
+        showSyncToast(
+          `Scanned ${messages.length} emails from ${mailboxEmail} and applied ${applied} to your tracker.`
+        );
+      }
+    } catch (error) {
+      // Surface the real failure. This path used to fall through to fabricated
+      // sample emails, which silently created fake OpenAI/Figma/Stripe jobs.
+      showSyncError(error instanceof Error ? error.message : 'Mailbox sync failed.');
     } finally {
       setIsSyncing(false);
     }
@@ -468,11 +426,12 @@ export default function JobTrackerPage() {
         });
         setJobs(updatedJobs);
         writeStorage('jobs_backup', updatedJobs);
-        setSyncToastMessage(`✓ AI extracted & synced ${extracted.companyName} (${extracted.jobTitle}) into your tracker!`);
-        setTimeout(() => setSyncToastMessage(null), 5000);
+        showSyncToast(`✓ AI extracted & synced ${extracted.companyName} (${extracted.jobTitle}) into your tracker!`);
+      } else {
+        showSyncError('Could not find a job application in that email text.');
       }
     } catch (err) {
-      console.error('Failed to parse pasted email:', err);
+      showSyncError(err instanceof Error ? err.message : 'Failed to parse the pasted email.');
     } finally {
       setIsSyncing(false);
     }
@@ -482,7 +441,7 @@ export default function JobTrackerPage() {
   const handleConfirmStatusUpdate = async (jobId: string, accept: boolean) => {
     const jobToUpdate = jobs.find(j => j.id === jobId);
     if (!jobToUpdate) return;
-    
+
     let updatedJob = { ...jobToUpdate };
     if (accept && jobToUpdate.pendingStatusUpdate) {
       const historyRecord = {
@@ -629,12 +588,12 @@ export default function JobTrackerPage() {
         if (detailJob?.id === editingJob.id) {
           setDetailJob(jobToUpdate);
         }
-} else {
-      if (!isProUser() && jobs.length >= FREE_LIMITS.jobsTracked) {
-        setJobLimitReached(true);
-        return;
-      }
-      const newJob = {
+      } else {
+        if (!isProUser() && jobs.length >= FREE_LIMITS.jobsTracked) {
+          setJobLimitReached(true);
+          return;
+        }
+        const newJob = {
           id: `job-${Date.now()}`,
           ...formData,
           tags: parsedTags,
@@ -683,7 +642,7 @@ export default function JobTrackerPage() {
   const handleStageChange = async (jobId: string, newStatus: JobStatus) => {
     const jobToUpdate = jobs.find(j => j.id === jobId);
     if (!jobToUpdate) return;
-    
+
     const updatedJob = { ...jobToUpdate, status: newStatus, updatedAt: new Date().toISOString() };
     try {
       await updateJob(updatedJob);
@@ -705,7 +664,7 @@ export default function JobTrackerPage() {
       const result = await analyzeJobMatch(job.title, job.company, job.description);
       const updatedJob = { ...job, matchResult: result };
       await updateJob(updatedJob);
-      
+
       const updatedJobs = jobs.map((j) => (j.id === job.id ? updatedJob : j));
       setJobs(updatedJobs);
       setDetailJob(updatedJob);
@@ -722,7 +681,7 @@ export default function JobTrackerPage() {
       const result = await generateInterviewPrep(job.title, job.company, job.description);
       const updatedJob = { ...job, interviewPrep: result };
       await updateJob(updatedJob);
-      
+
       const updatedJobs = jobs.map((j) => (j.id === job.id ? updatedJob : j));
       setJobs(updatedJobs);
       setDetailJob(updatedJob);
@@ -761,7 +720,7 @@ export default function JobTrackerPage() {
     const title = escapeIcs(`Interview with ${job.company} (${job.title})`);
     const description = escapeIcs(`Interview meeting for ${job.title} at ${job.company}.\nMeeting Link: ${job.interviewDetails.meetingLink || 'N/A'}`);
     const dateStr = job.interviewDetails.date.replace(/-/g, '');
-    
+
     const icsData = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
@@ -830,7 +789,7 @@ export default function JobTrackerPage() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               onClick={() => setIsEmailModalOpen(true)}
-              title={isMounted && emailConnections.length > 0 ? `Connected to ${emailConnections[0].email}` : 'Connect Gmail or Outlook'}
+              title={isMounted && emailConnections.length > 0 ? `Connected to ${emailConnections[0].email}` : 'Connect Gmail or paste an email'}
               className="inline-flex items-center gap-2 rounded-2xl border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 px-4 py-3 text-xs font-bold text-cyan-200 transition"
             >
               <Mail className="h-4 w-4 text-cyan-400" />
@@ -842,6 +801,13 @@ export default function JobTrackerPage() {
             <button
               onClick={() => triggerMailboxSync()}
               disabled={isSyncing}
+              title={
+                connectionsError
+                  ? 'Mailbox status unknown — retry loading your connections first'
+                  : isMounted && emailConnections.length === 0
+                    ? 'Connect a mailbox first'
+                    : 'Scan recent job emails'
+              }
               className="inline-flex items-center gap-2 rounded-2xl border border-violet-500/30 bg-violet-500/10 hover:bg-violet-500/20 px-4 py-3 text-xs font-bold text-violet-200 transition"
             >
               <RefreshCw className={`h-4 w-4 text-violet-400 ${isSyncing ? 'animate-spin' : ''}`} />
@@ -873,6 +839,22 @@ export default function JobTrackerPage() {
           </div>
         )}
 
+        {/* Sync Error Banner */}
+        {syncErrorMessage && (
+          <div className="mt-4 rounded-2xl border border-rose-500/40 bg-rose-950/60 p-3.5 flex items-center justify-between gap-3 text-rose-200 text-xs font-semibold shadow-lg backdrop-blur-md animate-fade-in">
+            <div className="flex items-center gap-2.5">
+              <AlertTriangle className="h-4 w-4 text-rose-400 shrink-0" />
+              <span>{syncErrorMessage}</span>
+            </div>
+            <button
+              onClick={() => setSyncErrorMessage(null)}
+              className="text-rose-400 hover:text-white text-xs px-2 py-0.5"
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
         {/* Low Confidence AI Proposal Banner if any */}
         {jobs.some((j) => j.needsConfirmation && j.pendingStatusUpdate) && (
           <div className="mt-6 rounded-2xl border border-amber-500/30 bg-amber-950/30 p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -888,12 +870,30 @@ export default function JobTrackerPage() {
           </div>
         )}
 
-        {/* Demo Data Clarification Banner */}
-        {isMounted && emailConnections.length === 0 && (
+        {/* Mailbox load failure. Distinct from "not connected" — the connection
+            list is unknown here, so we must not claim the account has none. */}
+        {isMounted && connectionsError && (
+          <div className="mt-4 rounded-2xl border border-amber-500/25 bg-amber-950/30 p-3 flex items-center justify-between gap-3 text-xs text-amber-200">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0" />
+              <span><strong>Could not load your mailbox connections</strong> — {connectionsError}</span>
+            </div>
+            <button
+              onClick={() => window.location.reload()}
+              className="shrink-0 rounded-lg border border-amber-500/30 px-2.5 py-1 font-semibold text-amber-200 transition hover:bg-amber-500/10"
+            >
+              Retry
+            </button>
+          </div>
+        )}
+
+        {/* Demo Data Clarification Banner — only when the list actually loaded
+            empty. A load failure must not masquerade as a demo account. */}
+        {isMounted && !connectionsError && emailConnections.length === 0 && (
           <div className="mt-4 rounded-2xl border border-rose-500/20 bg-rose-950/30 p-3 flex items-center justify-between gap-3 text-xs text-rose-200">
             <div className="flex items-center gap-2">
               <Sparkles className="h-4 w-4 text-rose-400 shrink-0" />
-              <span><strong>Demo — Gmail / Outlook not connected</strong> — Connect to sync real job application emails. Fake syncing is disabled.</span>
+              <span><strong>Demo — no mailbox connected</strong> — Email sync only reads your real inbox. Nothing is ever faked; until you connect Gmail, no emails are scanned.</span>
             </div>
           </div>
         )}
@@ -1001,17 +1001,15 @@ export default function JobTrackerPage() {
           <div className="flex rounded-xl border border-white/10 bg-white/5 p-1">
             <button
               onClick={() => setViewMode('kanban')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                viewMode === 'kanban' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'kanban' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <Kanban className="h-3.5 w-3.5" /> Board
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${
-                viewMode === 'table' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
-              }`}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition ${viewMode === 'table' ? 'bg-violet-600 text-white shadow-md' : 'text-slate-400 hover:text-white'
+                }`}
             >
               <TableIcon className="h-3.5 w-3.5" /> Table
             </button>
@@ -1523,598 +1521,593 @@ export default function JobTrackerPage() {
             {/* Scrollable Content Body */}
             <div className="p-6 sm:p-8 overflow-y-auto space-y-6">
 
-            {/* Modal Header */}
-            <div className="space-y-3 pb-6 border-b border-white/10">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-violet-500/20 px-2.5 py-1 text-xs font-bold text-violet-300 border border-violet-500/30">
-                  {detailJob.company}
-                </span>
-                <span className="rounded-md bg-white/10 px-2.5 py-1 text-xs font-semibold text-slate-300">
-                  {detailJob.workplaceType}
-                </span>
-                {detailJob.salary && (
-                  <span className="rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 border border-emerald-500/30">
-                    {detailJob.salary}
+              {/* Modal Header */}
+              <div className="space-y-3 pb-6 border-b border-white/10">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-md bg-violet-500/20 px-2.5 py-1 text-xs font-bold text-violet-300 border border-violet-500/30">
+                    {detailJob.company}
                   </span>
-                )}
-              </div>
-
-              <h2 className="text-2xl font-extrabold text-white">{detailJob.title}</h2>
-
-              <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-slate-400">Current Stage:</span>
-                  <select
-                    value={detailJob.status}
-                    onChange={(e) => handleStageChange(detailJob.id, e.target.value as JobStatus)}
-                    className="rounded-xl border border-violet-500/30 bg-violet-950/50 px-3 py-1.5 text-xs font-bold text-violet-200 focus:outline-none cursor-pointer"
-                  >
-                    <option value="SAVED">Saved / Wishlist</option>
-                    <option value="APPLIED">Applied</option>
-                    <option value="ASSESSMENT">Assessment</option>
-                    <option value="INTERVIEW">Interview</option>
-                    <option value="FINAL_INTERVIEW">Final Interview</option>
-                    <option value="OFFER">Offer Received</option>
-                    <option value="ACCEPTED">Offer Accepted 🎯</option>
-                    <option value="REJECTED">Rejected</option>
-                    <option value="WITHDRAWN">Withdrawn</option>
-                  </select>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  {detailJob.url && (
-                    <a
-                      href={detailJob.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
-                    >
-                      <ExternalLink className="h-3.5 w-3.5" /> Job Posting
-                    </a>
+                  <span className="rounded-md bg-white/10 px-2.5 py-1 text-xs font-semibold text-slate-300">
+                    {detailJob.workplaceType}
+                  </span>
+                  {detailJob.salary && (
+                    <span className="rounded-md bg-emerald-500/20 px-2.5 py-1 text-xs font-semibold text-emerald-300 border border-emerald-500/30">
+                      {detailJob.salary}
+                    </span>
                   )}
-                  <button
-                    onClick={() => handleGenerateCoverLetter(detailJob)}
-                    className="inline-flex items-center gap-1.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md"
-                  >
-                    <Wand2 className="h-3.5 w-3.5" /> Write Cover Letter
-                  </button>
+                </div>
+
+                <h2 className="text-2xl font-extrabold text-white">{detailJob.title}</h2>
+
+                <div className="flex flex-wrap items-center justify-between gap-4 pt-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-400">Current Stage:</span>
+                    <select
+                      value={detailJob.status}
+                      onChange={(e) => handleStageChange(detailJob.id, e.target.value as JobStatus)}
+                      className="rounded-xl border border-violet-500/30 bg-violet-950/50 px-3 py-1.5 text-xs font-bold text-violet-200 focus:outline-none cursor-pointer"
+                    >
+                      <option value="SAVED">Saved / Wishlist</option>
+                      <option value="APPLIED">Applied</option>
+                      <option value="ASSESSMENT">Assessment</option>
+                      <option value="INTERVIEW">Interview</option>
+                      <option value="FINAL_INTERVIEW">Final Interview</option>
+                      <option value="OFFER">Offer Received</option>
+                      <option value="ACCEPTED">Offer Accepted 🎯</option>
+                      <option value="REJECTED">Rejected</option>
+                      <option value="WITHDRAWN">Withdrawn</option>
+                    </select>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {detailJob.url && (
+                      <a
+                        href={detailJob.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-white/10"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" /> Job Posting
+                      </a>
+                    )}
+                    <button
+                      onClick={() => handleGenerateCoverLetter(detailJob)}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-fuchsia-600 hover:bg-fuchsia-500 px-3.5 py-1.5 text-xs font-bold text-white shadow-md"
+                    >
+                      <Wand2 className="h-3.5 w-3.5" /> Write Cover Letter
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
-            {/* Modal Tabs */}
-            <div className="flex border-b border-white/10 pt-4">
-              <button
-                onClick={() => setDetailTab('overview')}
-                className={`px-4 py-2.5 text-xs font-bold border-b-2 transition ${
-                  detailTab === 'overview'
-                    ? 'border-violet-500 text-violet-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
-                }`}
-              >
-                Overview & Notes
-              </button>
-              <button
-                onClick={() => setDetailTab('ai-match')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
-                  detailTab === 'ai-match'
-                    ? 'border-violet-500 text-violet-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
-                }`}
-              >
-                <Sparkles className="h-3.5 w-3.5 text-amber-400" /> AI Match Analysis
-              </button>
-              <button
-                onClick={() => setDetailTab('ai-prep')}
-                className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition ${
-                  detailTab === 'ai-prep'
-                    ? 'border-violet-500 text-violet-400'
-                    : 'border-transparent text-slate-400 hover:text-white'
-                }`}
-              >
-                <BrainCircuit className="h-3.5 w-3.5 text-cyan-400" /> AI Interview Prep
-              </button>
-            </div>
+              {/* Modal Tabs */}
+              <div className="flex border-b border-white/10 pt-4">
+                <button
+                  onClick={() => setDetailTab('overview')}
+                  className={`px-4 py-2.5 text-xs font-bold border-b-2 transition ${detailTab === 'overview'
+                      ? 'border-violet-500 text-violet-400'
+                      : 'border-transparent text-slate-400 hover:text-white'
+                    }`}
+                >
+                  Overview & Notes
+                </button>
+                <button
+                  onClick={() => setDetailTab('ai-match')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition ${detailTab === 'ai-match'
+                      ? 'border-violet-500 text-violet-400'
+                      : 'border-transparent text-slate-400 hover:text-white'
+                    }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-400" /> AI Match Analysis
+                </button>
+                <button
+                  onClick={() => setDetailTab('ai-prep')}
+                  className={`flex items-center gap-1.5 px-4 py-2.5 text-xs font-bold border-b-2 transition ${detailTab === 'ai-prep'
+                      ? 'border-violet-500 text-violet-400'
+                      : 'border-transparent text-slate-400 hover:text-white'
+                    }`}
+                >
+                  <BrainCircuit className="h-3.5 w-3.5 text-cyan-400" /> AI Interview Prep
+                </button>
+              </div>
 
-            {/* Tab 1 Content: Overview */}
-            {detailTab === 'overview' && (
-              <div className="py-6 space-y-6 text-xs text-slate-300">
-                {/* Low Confidence Proposal Banner */}
-                {detailJob.needsConfirmation && detailJob.pendingStatusUpdate && (
-                  <div className="rounded-2xl border border-amber-500/30 bg-amber-950/40 p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
-                      <AlertTriangle className="h-4 w-4 text-amber-400" />
-                      Status Confirmation Requested
-                    </div>
-                    <p className="text-[11px] text-amber-200/90 leading-relaxed">
-                       DevLaunch AI parsed an email with subject <strong>&quot;{detailJob.pendingStatusUpdate.emailSubject}&quot;</strong> proposing a status change to <strong>{detailJob.pendingStatusUpdate.proposedStatus}</strong> (Confidence: {detailJob.pendingStatusUpdate.confidence}%).
-                    </p>
-                    <div className="flex items-center gap-2 pt-1">
-                      <button
-                        onClick={() => handleConfirmStatusUpdate(detailJob.id, true)}
-                        className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 shadow-md"
-                      >
-                        Accept Status Update
-                      </button>
-                      <button
-                        onClick={() => handleConfirmStatusUpdate(detailJob.id, false)}
-                        className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs font-semibold text-slate-300"
-                      >
-                        Decline
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {/* AI Next Action Recommendation */}
-                {detailJob.nextAction && (
-                  <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 font-bold text-cyan-300 text-xs">
-                        <Zap className="h-4 w-4 text-cyan-400" /> AI Recommended Next Action
+              {/* Tab 1 Content: Overview */}
+              {detailTab === 'overview' && (
+                <div className="py-6 space-y-6 text-xs text-slate-300">
+                  {/* Low Confidence Proposal Banner */}
+                  {detailJob.needsConfirmation && detailJob.pendingStatusUpdate && (
+                    <div className="rounded-2xl border border-amber-500/30 bg-amber-950/40 p-4 space-y-3">
+                      <div className="flex items-center gap-2 text-amber-300 font-bold text-xs">
+                        <AlertTriangle className="h-4 w-4 text-amber-400" />
+                        Status Confirmation Requested
                       </div>
-                      <button
-                        onClick={() => handleDraftFollowUp(detailJob)}
-                        disabled={isGeneratingFollowUp}
-                        className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3 py-1 text-[11px] font-bold text-white shadow-md transition"
-                      >
-                        <Send className="h-3 w-3" />
-                        {isGeneratingFollowUp ? 'Drafting...' : 'Draft Follow-Up Email'}
-                      </button>
+                      <p className="text-[11px] text-amber-200/90 leading-relaxed">
+                        DevLaunch AI parsed an email with subject <strong>&quot;{detailJob.pendingStatusUpdate.emailSubject}&quot;</strong> proposing a status change to <strong>{detailJob.pendingStatusUpdate.proposedStatus}</strong> (Confidence: {detailJob.pendingStatusUpdate.confidence}%).
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => handleConfirmStatusUpdate(detailJob.id, true)}
+                          className="rounded-xl bg-amber-500 hover:bg-amber-400 px-4 py-2 text-xs font-bold text-slate-950 shadow-md"
+                        >
+                          Accept Status Update
+                        </button>
+                        <button
+                          onClick={() => handleConfirmStatusUpdate(detailJob.id, false)}
+                          className="rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 px-4 py-2 text-xs font-semibold text-slate-300"
+                        >
+                          Decline
+                        </button>
+                      </div>
                     </div>
-                    <p className="text-xs text-cyan-100 font-medium leading-relaxed">
-                      {detailJob.nextAction}
-                    </p>
+                  )}
 
-                    {/* AI Generated Follow-Up Email Box */}
-                    {followUpEmailText && (
-                      <div className="mt-3 rounded-xl border border-cyan-500/30 bg-slate-950 p-3 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Generated Follow-up Draft</span>
-                          <button
-                            onClick={() => {
-                              navigator.clipboard.writeText(followUpEmailText);
-                              setIsCopiedFollowUp(true);
-                              setTimeout(() => setIsCopiedFollowUp(false), 2000);
-                            }}
-                            className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 hover:text-white"
-                          >
-                            {isCopiedFollowUp ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                            {isCopiedFollowUp ? 'Copied!' : 'Copy to Clipboard'}
-                          </button>
+                  {/* AI Next Action Recommendation */}
+                  {detailJob.nextAction && (
+                    <div className="rounded-2xl border border-cyan-500/30 bg-cyan-950/20 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-cyan-300 text-xs">
+                          <Zap className="h-4 w-4 text-cyan-400" /> AI Recommended Next Action
                         </div>
-                        <pre className="text-[11px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">
-                          {followUpEmailText}
-                        </pre>
+                        <button
+                          onClick={() => handleDraftFollowUp(detailJob)}
+                          disabled={isGeneratingFollowUp}
+                          className="inline-flex items-center gap-1.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3 py-1 text-[11px] font-bold text-white shadow-md transition"
+                        >
+                          <Send className="h-3 w-3" />
+                          {isGeneratingFollowUp ? 'Drafting...' : 'Draft Follow-Up Email'}
+                        </button>
                       </div>
-                    )}
-                  </div>
-                )}
+                      <p className="text-xs text-cyan-100 font-medium leading-relaxed">
+                        {detailJob.nextAction}
+                      </p>
 
-                {/* Interview Tracking Section */}
-                {detailJob.interviewDetails && (
-                  <div className="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2 font-bold text-violet-300 text-xs uppercase tracking-wider">
-                        <Calendar className="h-4 w-4 text-violet-400" /> Interview Schedule & Details
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {detailJob.interviewDetails.date && (
-                          <button
-                            onClick={() => handleDownloadCalendarInvite(detailJob)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/20 hover:bg-violet-500/30 px-2.5 py-1 text-[10px] font-bold text-violet-200"
-                            title="Export Calendar Event (.ics)"
-                          >
-                            <Download className="h-3 w-3" /> Add to Calendar
-                          </button>
-                        )}
-                        {detailJob.interviewDetails.type && (
-                          <span className="rounded-full bg-violet-500/20 border border-violet-500/30 px-2.5 py-0.5 text-[10px] font-bold text-violet-200">
-                            {detailJob.interviewDetails.type}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div className="space-y-1">
-                        <div className="text-[10px] text-slate-400">Scheduled Date</div>
-                        <div className="font-bold text-white text-xs">{detailJob.interviewDetails.date || 'TBD'}</div>
-                      </div>
-                      {detailJob.interviewDetails.meetingLink && (
-                        <div className="space-y-1">
-                          <div className="text-[10px] text-slate-400">Video Call Link</div>
-                          <a
-                            href={detailJob.interviewDetails.meetingLink}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 font-bold text-violet-400 hover:underline text-xs"
-                          >
-                            <ExternalLink className="h-3.5 w-3.5" /> Join Video Interview
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* 💰 Offer Negotiation AI Assistant (only for OFFER / ACCEPTED status) */}
-                {(detailJob.status === 'OFFER' || detailJob.status === 'offer' || detailJob.status === 'ACCEPTED') && (
-                  <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-4">
-                    <div className="flex items-center gap-2 font-bold text-emerald-300 text-xs uppercase tracking-wider">
-                      <DollarSign className="h-4 w-4 text-emerald-400" /> AI Offer Negotiation Assistant
-                    </div>
-                    <p className="text-[11px] text-emerald-200/80 leading-relaxed">
-                      Enter your offer details to get a personalized market comparison, negotiation email draft, and talking points.
-                    </p>
-
-                    {/* Negotiation Input Form */}
-                    <div className="grid gap-3 sm:grid-cols-2">
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Offered Base Salary</label>
-                        <input
-                          type="text"
-                          value={negotiationForm.offeredBase}
-                          onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredBase: e.target.value })}
-                          placeholder={detailJob.salary || '$150,000'}
-                          className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Your Target Base</label>
-                        <input
-                          type="text"
-                          value={negotiationForm.targetBase}
-                          onChange={(e) => setNegotiationForm({ ...negotiationForm, targetBase: e.target.value })}
-                          placeholder="$175,000"
-                          className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Equity (Optional)</label>
-                        <input
-                          type="text"
-                          value={negotiationForm.offeredEquity}
-                          onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredEquity: e.target.value })}
-                          placeholder="$50,000 RSU over 4 years"
-                          className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-[10px] text-slate-400 block mb-1">Sign-On Bonus (Optional)</label>
-                        <input
-                          type="text"
-                          value={negotiationForm.offeredBonus}
-                          onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredBonus: e.target.value })}
-                          placeholder="$15,000"
-                          className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleRunNegotiation(detailJob)}
-                      disabled={isNegotiating}
-                      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition"
-                    >
-                      <TrendingUp className="h-3.5 w-3.5" />
-                      {isNegotiating ? 'Analyzing Offer...' : 'Generate Negotiation Strategy'}
-                    </button>
-
-                    {/* Results */}
-                    {negotiationResult && (
-                      <div className="space-y-4 pt-2">
-                        {/* Risk Badge */}
-                        <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Negotiation Risk:</span>
-                          <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${
-                            negotiationResult.riskLevel === 'Low'
-                              ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
-                              : negotiationResult.riskLevel === 'Medium'
-                              ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
-                              : 'bg-rose-500/20 border-rose-500/30 text-rose-300'
-                          }`}>
-                            {negotiationResult.riskLevel} Risk
-                          </span>
-                        </div>
-
-                        {/* Market Analysis */}
-                        <div className="rounded-xl border border-emerald-500/20 bg-slate-950 p-3">
-                          <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
-                            <BarChart3 className="h-3 w-3" /> Market Analysis
-                          </div>
-                          <p className="text-[11px] text-slate-300 leading-relaxed">{negotiationResult.marketAnalysis}</p>
-                        </div>
-
-                        {/* Talking Points */}
-                        <div className="rounded-xl border border-white/10 bg-slate-950 p-3">
-                          <div className="text-[10px] font-bold text-white uppercase tracking-wider mb-2">Key Talking Points</div>
-                          <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
-                            {negotiationResult.talkingPoints.map((pt, i) => (
-                              <li key={i}>{pt}</li>
-                            ))}
-                          </ul>
-                        </div>
-
-                        {/* Negotiation Email Draft */}
-                        <div className="rounded-xl border border-emerald-500/20 bg-slate-950 p-3 space-y-2">
+                      {/* AI Generated Follow-Up Email Box */}
+                      {followUpEmailText && (
+                        <div className="mt-3 rounded-xl border border-cyan-500/30 bg-slate-950 p-3 space-y-2">
                           <div className="flex items-center justify-between">
-                            <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Negotiation Email Draft</span>
+                            <span className="text-[10px] font-bold text-cyan-400 uppercase tracking-wider">Generated Follow-up Draft</span>
                             <button
                               onClick={() => {
-                                navigator.clipboard.writeText(negotiationResult.negotiationEmail);
-                                setIsCopiedNegotiation(true);
-                                setTimeout(() => setIsCopiedNegotiation(false), 2000);
+                                navigator.clipboard.writeText(followUpEmailText);
+                                setIsCopiedFollowUp(true);
+                                setTimeout(() => setIsCopiedFollowUp(false), 2000);
                               }}
                               className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 hover:text-white"
                             >
-                              {isCopiedNegotiation ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
-                              {isCopiedNegotiation ? 'Copied!' : 'Copy Email'}
+                              {isCopiedFollowUp ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                              {isCopiedFollowUp ? 'Copied!' : 'Copy to Clipboard'}
                             </button>
                           </div>
-                          <pre className="text-[11px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{negotiationResult.negotiationEmail}</pre>
+                          <pre className="text-[11px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">
+                            {followUpEmailText}
+                          </pre>
                         </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Interview Tracking Section */}
+                  {detailJob.interviewDetails && (
+                    <div className="rounded-2xl border border-violet-500/30 bg-violet-950/20 p-4 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2 font-bold text-violet-300 text-xs uppercase tracking-wider">
+                          <Calendar className="h-4 w-4 text-violet-400" /> Interview Schedule & Details
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {detailJob.interviewDetails.date && (
+                            <button
+                              onClick={() => handleDownloadCalendarInvite(detailJob)}
+                              className="inline-flex items-center gap-1.5 rounded-xl border border-violet-500/30 bg-violet-500/20 hover:bg-violet-500/30 px-2.5 py-1 text-[10px] font-bold text-violet-200"
+                              title="Export Calendar Event (.ics)"
+                            >
+                              <Download className="h-3 w-3" /> Add to Calendar
+                            </button>
+                          )}
+                          {detailJob.interviewDetails.type && (
+                            <span className="rounded-full bg-violet-500/20 border border-violet-500/30 px-2.5 py-0.5 text-[10px] font-bold text-violet-200">
+                              {detailJob.interviewDetails.type}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1">
+                          <div className="text-[10px] text-slate-400">Scheduled Date</div>
+                          <div className="font-bold text-white text-xs">{detailJob.interviewDetails.date || 'TBD'}</div>
+                        </div>
+                        {detailJob.interviewDetails.meetingLink && (
+                          <div className="space-y-1">
+                            <div className="text-[10px] text-slate-400">Video Call Link</div>
+                            <a
+                              href={detailJob.interviewDetails.meetingLink}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 font-bold text-violet-400 hover:underline text-xs"
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" /> Join Video Interview
+                            </a>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* 💰 Offer Negotiation AI Assistant (only for OFFER / ACCEPTED status) */}
+                  {(detailJob.status === 'OFFER' || detailJob.status === 'offer' || detailJob.status === 'ACCEPTED') && (
+                    <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 space-y-4">
+                      <div className="flex items-center gap-2 font-bold text-emerald-300 text-xs uppercase tracking-wider">
+                        <DollarSign className="h-4 w-4 text-emerald-400" /> AI Offer Negotiation Assistant
+                      </div>
+                      <p className="text-[11px] text-emerald-200/80 leading-relaxed">
+                        Enter your offer details to get a personalized market comparison, negotiation email draft, and talking points.
+                      </p>
+
+                      {/* Negotiation Input Form */}
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Offered Base Salary</label>
+                          <input
+                            type="text"
+                            value={negotiationForm.offeredBase}
+                            onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredBase: e.target.value })}
+                            placeholder={detailJob.salary || '$150,000'}
+                            className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Your Target Base</label>
+                          <input
+                            type="text"
+                            value={negotiationForm.targetBase}
+                            onChange={(e) => setNegotiationForm({ ...negotiationForm, targetBase: e.target.value })}
+                            placeholder="$175,000"
+                            className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Equity (Optional)</label>
+                          <input
+                            type="text"
+                            value={negotiationForm.offeredEquity}
+                            onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredEquity: e.target.value })}
+                            placeholder="$50,000 RSU over 4 years"
+                            className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 block mb-1">Sign-On Bonus (Optional)</label>
+                          <input
+                            type="text"
+                            value={negotiationForm.offeredBonus}
+                            onChange={(e) => setNegotiationForm({ ...negotiationForm, offeredBonus: e.target.value })}
+                            placeholder="$15,000"
+                            className="w-full rounded-lg border border-white/10 bg-slate-950 px-3 py-2 text-xs text-white placeholder:text-slate-500 focus:outline-none focus:border-emerald-500/50"
+                          />
+                        </div>
+                      </div>
+
+                      <button
+                        onClick={() => handleRunNegotiation(detailJob)}
+                        disabled={isNegotiating}
+                        className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition"
+                      >
+                        <TrendingUp className="h-3.5 w-3.5" />
+                        {isNegotiating ? 'Analyzing Offer...' : 'Generate Negotiation Strategy'}
+                      </button>
+
+                      {/* Results */}
+                      {negotiationResult && (
+                        <div className="space-y-4 pt-2">
+                          {/* Risk Badge */}
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Negotiation Risk:</span>
+                            <span className={`rounded-full px-2.5 py-0.5 text-[10px] font-bold border ${negotiationResult.riskLevel === 'Low'
+                                ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-300'
+                                : negotiationResult.riskLevel === 'Medium'
+                                  ? 'bg-amber-500/20 border-amber-500/30 text-amber-300'
+                                  : 'bg-rose-500/20 border-rose-500/30 text-rose-300'
+                              }`}>
+                              {negotiationResult.riskLevel} Risk
+                            </span>
+                          </div>
+
+                          {/* Market Analysis */}
+                          <div className="rounded-xl border border-emerald-500/20 bg-slate-950 p-3">
+                            <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase tracking-wider mb-1.5">
+                              <BarChart3 className="h-3 w-3" /> Market Analysis
+                            </div>
+                            <p className="text-[11px] text-slate-300 leading-relaxed">{negotiationResult.marketAnalysis}</p>
+                          </div>
+
+                          {/* Talking Points */}
+                          <div className="rounded-xl border border-white/10 bg-slate-950 p-3">
+                            <div className="text-[10px] font-bold text-white uppercase tracking-wider mb-2">Key Talking Points</div>
+                            <ul className="space-y-1.5 text-[11px] text-slate-300 list-disc list-inside">
+                              {negotiationResult.talkingPoints.map((pt, i) => (
+                                <li key={i}>{pt}</li>
+                              ))}
+                            </ul>
+                          </div>
+
+                          {/* Negotiation Email Draft */}
+                          <div className="rounded-xl border border-emerald-500/20 bg-slate-950 p-3 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wider">Negotiation Email Draft</span>
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(negotiationResult.negotiationEmail);
+                                  setIsCopiedNegotiation(true);
+                                  setTimeout(() => setIsCopiedNegotiation(false), 2000);
+                                }}
+                                className="inline-flex items-center gap-1 text-[10px] font-semibold text-slate-300 hover:text-white"
+                              >
+                                {isCopiedNegotiation ? <Check className="h-3 w-3 text-emerald-400" /> : <Copy className="h-3 w-3" />}
+                                {isCopiedNegotiation ? 'Copied!' : 'Copy Email'}
+                              </button>
+                            </div>
+                            <pre className="text-[11px] font-mono text-slate-300 leading-relaxed whitespace-pre-wrap">{negotiationResult.negotiationEmail}</pre>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Contact Information Card */}
+                  <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-3">
+                    <h3 className="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                      <UserIcon className="h-3.5 w-3.5" /> Candidate & Recruiter Contact
+                    </h3>
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-2.5 border border-white/5">
+                        <Mail className="h-4 w-4 text-violet-400 shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="text-[10px] text-slate-400">Application Email</div>
+                          <div className="font-semibold text-slate-200 truncate">{detailJob.applicantEmail || 'Not specified'}</div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-2.5 border border-white/5">
+                        <Phone className="h-4 w-4 text-cyan-400 shrink-0" />
+                        <div className="overflow-hidden">
+                          <div className="text-[10px] text-slate-400">Application Phone</div>
+                          <div className="font-semibold text-slate-200 truncate">{detailJob.applicantPhone || 'Not specified'}</div>
+                        </div>
+                      </div>
+                    </div>
+                    {detailJob.recruiterEmail && (
+                      <div className="pt-2 border-t border-white/5 text-[11px] text-slate-400">
+                        Recruiter Contact: <span className="font-semibold text-slate-200">{detailJob.recruiterName ? `${detailJob.recruiterName} (${detailJob.recruiterEmail})` : detailJob.recruiterEmail}</span>
                       </div>
                     )}
                   </div>
-                )}
 
-                {/* Contact Information Card */}
-                <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-3">
-                  <h3 className="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                    <UserIcon className="h-3.5 w-3.5" /> Candidate & Recruiter Contact
-                  </h3>
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-2.5 border border-white/5">
-                      <Mail className="h-4 w-4 text-violet-400 shrink-0" />
-                      <div className="overflow-hidden">
-                        <div className="text-[10px] text-slate-400">Application Email</div>
-                        <div className="font-semibold text-slate-200 truncate">{detailJob.applicantEmail || 'Not specified'}</div>
+                  {/* Status History Timeline */}
+                  {detailJob.statusHistory && detailJob.statusHistory.length > 0 && (
+                    <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-3">
+                      <h3 className="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
+                        <History className="h-3.5 w-3.5 text-amber-400" /> Status Pipeline History Timeline
+                      </h3>
+                      <div className="relative border-l border-white/10 pl-4 space-y-3">
+                        {detailJob.statusHistory.map((hist) => (
+                          <div key={hist.id} className="relative space-y-1">
+                            <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-slate-950" />
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="font-bold text-white uppercase">{hist.toStatus}</span>
+                              <span className="text-[10px] text-slate-400">{new Date(hist.timestamp).toLocaleDateString()}</span>
+                            </div>
+                            {hist.emailSubject && (
+                              <div className="text-[11px] text-slate-400 italic truncate">
+                                &quot;{hist.emailSubject}&quot;
+                              </div>
+                            )}
+                            {hist.aiConfidence && (
+                              <div className="text-[10px] text-violet-400 font-semibold">
+                                AI Confidence: {hist.aiConfidence}%
+                              </div>
+                            )}
+                          </div>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 rounded-xl bg-slate-900 p-2.5 border border-white/5">
-                      <Phone className="h-4 w-4 text-cyan-400 shrink-0" />
-                      <div className="overflow-hidden">
-                        <div className="text-[10px] text-slate-400">Application Phone</div>
-                        <div className="font-semibold text-slate-200 truncate">{detailJob.applicantPhone || 'Not specified'}</div>
-                      </div>
+                  )}
+
+                  {detailJob.description && (
+                    <div>
+                      <h3 className="font-bold text-slate-200 text-sm mb-2">Job Description Highlights</h3>
+                      <p className="rounded-2xl border border-white/10 bg-slate-950 p-4 leading-relaxed whitespace-pre-wrap text-slate-300">
+                        {detailJob.description}
+                      </p>
                     </div>
+                  )}
+
+                  <div>
+                    <h3 className="font-bold text-slate-200 text-sm mb-2">Application Notes</h3>
+                    <p className="rounded-2xl border border-white/10 bg-slate-950 p-4 leading-relaxed whitespace-pre-wrap text-slate-400">
+                      {detailJob.notes || 'No notes added yet. Use edit to add recruiter contacts, interview dates, or technical questions.'}
+                    </p>
                   </div>
-                  {detailJob.recruiterEmail && (
-                    <div className="pt-2 border-t border-white/5 text-[11px] text-slate-400">
-                      Recruiter Contact: <span className="font-semibold text-slate-200">{detailJob.recruiterName ? `${detailJob.recruiterName} (${detailJob.recruiterEmail})` : detailJob.recruiterEmail}</span>
+
+                  {detailJob.tags && detailJob.tags.length > 0 && (
+                    <div>
+                      <h3 className="font-bold text-slate-200 text-sm mb-2">Tags</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {detailJob.tags.map((t, i) => (
+                          <span key={i} className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-300">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
+              )}
 
-                {/* Status History Timeline */}
-                {detailJob.statusHistory && detailJob.statusHistory.length > 0 && (
-                  <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-3">
-                    <h3 className="font-bold text-slate-200 text-xs uppercase tracking-wider flex items-center gap-1.5">
-                      <History className="h-3.5 w-3.5 text-amber-400" /> Status Pipeline History Timeline
-                    </h3>
-                    <div className="relative border-l border-white/10 pl-4 space-y-3">
-                      {detailJob.statusHistory.map((hist) => (
-                        <div key={hist.id} className="relative space-y-1">
-                          <span className="absolute -left-[21px] top-1 h-2.5 w-2.5 rounded-full bg-violet-500 ring-4 ring-slate-950" />
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="font-bold text-white uppercase">{hist.toStatus}</span>
-                            <span className="text-[10px] text-slate-400">{new Date(hist.timestamp).toLocaleDateString()}</span>
-                          </div>
-                          {hist.emailSubject && (
-                            <div className="text-[11px] text-slate-400 italic truncate">
-                              &quot;{hist.emailSubject}&quot;
-                            </div>
-                          )}
-                          {hist.aiConfidence && (
-                            <div className="text-[10px] text-violet-400 font-semibold">
-                              AI Confidence: {hist.aiConfidence}%
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {detailJob.description && (
-                  <div>
-                    <h3 className="font-bold text-slate-200 text-sm mb-2">Job Description Highlights</h3>
-                    <p className="rounded-2xl border border-white/10 bg-slate-950 p-4 leading-relaxed whitespace-pre-wrap text-slate-300">
-                      {detailJob.description}
-                    </p>
-                  </div>
-                )}
-
-                <div>
-                  <h3 className="font-bold text-slate-200 text-sm mb-2">Application Notes</h3>
-                  <p className="rounded-2xl border border-white/10 bg-slate-950 p-4 leading-relaxed whitespace-pre-wrap text-slate-400">
-                    {detailJob.notes || 'No notes added yet. Use edit to add recruiter contacts, interview dates, or technical questions.'}
-                  </p>
-                </div>
-
-                {detailJob.tags && detailJob.tags.length > 0 && (
-                  <div>
-                    <h3 className="font-bold text-slate-200 text-sm mb-2">Tags</h3>
-                    <div className="flex flex-wrap gap-2">
-                      {detailJob.tags.map((t, i) => (
-                        <span key={i} className="rounded-lg border border-violet-500/30 bg-violet-500/10 px-2.5 py-1 font-semibold text-violet-300">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab 2 Content: AI Match */}
-            {detailTab === 'ai-match' && (
-              <div className="py-6 space-y-6">
-                {!detailJob.matchResult ? (
-                  <div className="rounded-3xl border border-white/10 bg-slate-950 p-8 text-center space-y-4">
-                    <Sparkles className="mx-auto h-10 w-10 text-amber-400 animate-pulse" />
-                    <div>
-                      <h3 className="text-base font-bold text-white">Analyze Fit for {detailJob.title}</h3>
-                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                        DevLaunch AI will evaluate the job requirements against candidate technical skills to produce a match score and actionable tips.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRunMatchAnalysis(detailJob)}
-                      disabled={isAnalyzing}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 hover:bg-amber-400 px-6 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20"
-                    >
-                      {isAnalyzing ? 'Analyzing Job Fit...' : 'Run AI Match Score'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    {/* Score Bar */}
-                    <div className="flex items-center justify-between rounded-2xl border border-violet-500/30 bg-slate-950 p-5">
+              {/* Tab 2 Content: AI Match */}
+              {detailTab === 'ai-match' && (
+                <div className="py-6 space-y-6">
+                  {!detailJob.matchResult ? (
+                    <div className="rounded-3xl border border-white/10 bg-slate-950 p-8 text-center space-y-4">
+                      <Sparkles className="mx-auto h-10 w-10 text-amber-400 animate-pulse" />
                       <div>
-                        <span className="text-xs font-semibold text-violet-300">AI Role Compatibility</span>
-                        <div className="text-3xl font-extrabold text-white mt-1">
-                          {detailJob.matchResult.matchScore}%
-                        </div>
+                        <h3 className="text-base font-bold text-white">Analyze Fit for {detailJob.title}</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                          DevLaunch AI will evaluate the job requirements against candidate technical skills to produce a match score and actionable tips.
+                        </p>
                       </div>
                       <button
                         onClick={() => handleRunMatchAnalysis(detailJob)}
-                        className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                        disabled={isAnalyzing}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-amber-500 hover:bg-amber-400 px-6 py-3 text-xs font-bold text-slate-950 shadow-lg shadow-amber-500/20"
                       >
-                        Re-analyze
+                        {isAnalyzing ? 'Analyzing Job Fit...' : 'Run AI Match Score'}
                       </button>
                     </div>
-
-                    {/* Matched Skills & Gaps */}
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-4 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-emerald-300 text-xs">
-                          <CheckCircle2 className="h-4 w-4" /> Strong Skill Overlaps
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {detailJob.matchResult.matchingSkills.map((s, idx) => (
-                            <span key={idx} className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-200 border border-emerald-500/30">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-
-                      <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-4 space-y-2">
-                        <div className="flex items-center gap-2 font-bold text-amber-300 text-xs">
-                          <TrendingUp className="h-4 w-4" /> Recommended Keywords
-                        </div>
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {detailJob.matchResult.missingKeywords.map((s, idx) => (
-                            <span key={idx} className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-200 border border-amber-500/30">
-                              {s}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Recommendations */}
-                    <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
-                      <h4 className="font-bold text-white text-xs">AI Resume Positioning Tips</h4>
-                      <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
-                        {detailJob.matchResult.recommendations.map((rec, i) => (
-                          <li key={i}>{rec}</li>
-                        ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Tab 3 Content: AI Interview Prep */}
-            {detailTab === 'ai-prep' && (
-              <div className="py-6 space-y-6">
-                {!detailJob.interviewPrep ? (
-                  <div className="rounded-3xl border border-white/10 bg-slate-950 p-8 text-center space-y-4">
-                    <BrainCircuit className="mx-auto h-10 w-10 text-cyan-400 animate-pulse" />
-                    <div>
-                      <h3 className="text-base font-bold text-white">Generate Interview Briefing</h3>
-                      <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
-                        Get tailored technical & behavioral interview questions, talking points, and smart questions to ask the interviewer.
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleRunInterviewPrep(detailJob)}
-                      disabled={isPrepping}
-                      className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 hover:bg-cyan-500 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-cyan-600/20"
-                    >
-                      {isPrepping ? 'Building Interview Brief...' : 'Generate AI Interview Prep'}
-                    </button>
-                  </div>
-                ) : (
-                  <div className="space-y-6">
-                    <p className="rounded-2xl border border-cyan-500/20 bg-cyan-950/30 p-4 text-xs text-cyan-200 leading-relaxed">
-                      {detailJob.interviewPrep.summary}
-                    </p>
-
-                    <div className="space-y-4">
-                      <h4 className="font-bold text-white text-sm">Key Interview Questions & Talking Points</h4>
-                      {detailJob.interviewPrep.questions.map((q, idx) => (
-                        <div key={idx} className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="rounded-md bg-violet-500/20 px-2 py-0.5 text-[10px] font-bold text-violet-300 uppercase">
-                              {q.category}
-                            </span>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Score Bar */}
+                      <div className="flex items-center justify-between rounded-2xl border border-violet-500/30 bg-slate-950 p-5">
+                        <div>
+                          <span className="text-xs font-semibold text-violet-300">AI Role Compatibility</span>
+                          <div className="text-3xl font-extrabold text-white mt-1">
+                            {detailJob.matchResult.matchScore}%
                           </div>
-                          <p className="font-bold text-xs text-white">{q.question}</p>
-                          <ul className="pl-4 text-xs text-slate-400 list-disc space-y-1">
-                            {q.talkingPoints.map((tp, i) => (
-                              <li key={i}>{tp}</li>
-                            ))}
-                          </ul>
                         </div>
-                      ))}
-                    </div>
+                        <button
+                          onClick={() => handleRunMatchAnalysis(detailJob)}
+                          className="rounded-xl border border-white/10 bg-white/5 px-3 py-1.5 text-xs font-semibold text-slate-300 hover:bg-white/10"
+                        >
+                          Re-analyze
+                        </button>
+                      </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
-                      <h4 className="font-bold text-white text-xs">Questions to Ask the Hiring Team</h4>
-                      <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
-                        {detailJob.interviewPrep.questionsToAskInterviewer.map((q, i) => (
-                          <li key={i}>{q}</li>
+                      {/* Matched Skills & Gaps */}
+                      <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-4 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-emerald-300 text-xs">
+                            <CheckCircle2 className="h-4 w-4" /> Strong Skill Overlaps
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {detailJob.matchResult.matchingSkills.map((s, idx) => (
+                              <span key={idx} className="rounded-md bg-emerald-500/20 px-2 py-0.5 text-[11px] text-emerald-200 border border-emerald-500/30">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="rounded-2xl border border-amber-500/20 bg-amber-950/20 p-4 space-y-2">
+                          <div className="flex items-center gap-2 font-bold text-amber-300 text-xs">
+                            <TrendingUp className="h-4 w-4" /> Recommended Keywords
+                          </div>
+                          <div className="flex flex-wrap gap-1.5 pt-1">
+                            {detailJob.matchResult.missingKeywords.map((s, idx) => (
+                              <span key={idx} className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[11px] text-amber-200 border border-amber-500/30">
+                                {s}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Recommendations */}
+                      <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
+                        <h4 className="font-bold text-white text-xs">AI Resume Positioning Tips</h4>
+                        <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
+                          {detailJob.matchResult.recommendations.map((rec, i) => (
+                            <li key={i}>{rec}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 3 Content: AI Interview Prep */}
+              {detailTab === 'ai-prep' && (
+                <div className="py-6 space-y-6">
+                  {!detailJob.interviewPrep ? (
+                    <div className="rounded-3xl border border-white/10 bg-slate-950 p-8 text-center space-y-4">
+                      <BrainCircuit className="mx-auto h-10 w-10 text-cyan-400 animate-pulse" />
+                      <div>
+                        <h3 className="text-base font-bold text-white">Generate Interview Briefing</h3>
+                        <p className="text-xs text-slate-400 mt-1 max-w-md mx-auto">
+                          Get tailored technical & behavioral interview questions, talking points, and smart questions to ask the interviewer.
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleRunInterviewPrep(detailJob)}
+                        disabled={isPrepping}
+                        className="inline-flex items-center gap-2 rounded-2xl bg-cyan-600 hover:bg-cyan-500 px-6 py-3 text-xs font-bold text-white shadow-lg shadow-cyan-600/20"
+                      >
+                        {isPrepping ? 'Building Interview Brief...' : 'Generate AI Interview Prep'}
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      <p className="rounded-2xl border border-cyan-500/20 bg-cyan-950/30 p-4 text-xs text-cyan-200 leading-relaxed">
+                        {detailJob.interviewPrep.summary}
+                      </p>
+
+                      <div className="space-y-4">
+                        <h4 className="font-bold text-white text-sm">Key Interview Questions & Talking Points</h4>
+                        {detailJob.interviewPrep.questions.map((q, idx) => (
+                          <div key={idx} className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
+                            <div className="flex items-center justify-between">
+                              <span className="rounded-md bg-violet-500/20 px-2 py-0.5 text-[10px] font-bold text-violet-300 uppercase">
+                                {q.category}
+                              </span>
+                            </div>
+                            <p className="font-bold text-xs text-white">{q.question}</p>
+                            <ul className="pl-4 text-xs text-slate-400 list-disc space-y-1">
+                              {q.talkingPoints.map((tp, i) => (
+                                <li key={i}>{tp}</li>
+                              ))}
+                            </ul>
+                          </div>
                         ))}
-                      </ul>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
+                      </div>
 
-            {/* Footer Navigation & Close Bar */}
-            <div className="mt-8 pt-5 border-t border-white/10 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setDetailJob(null)}
-                className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-bold text-slate-200 transition"
-              >
-                <ArrowLeft className="h-3.5 w-3.5 text-violet-400" />
-                Back to Applications
-              </button>
-              <button
-                type="button"
-                onClick={() => setDetailJob(null)}
-                className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 text-xs font-bold text-rose-300 transition"
-              >
-                Close Modal ✕
-              </button>
+                      <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 space-y-2">
+                        <h4 className="font-bold text-white text-xs">Questions to Ask the Hiring Team</h4>
+                        <ul className="space-y-1.5 text-xs text-slate-300 list-disc list-inside">
+                          {detailJob.interviewPrep.questionsToAskInterviewer.map((q, i) => (
+                            <li key={i}>{q}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Footer Navigation & Close Bar */}
+              <div className="mt-8 pt-5 border-t border-white/10 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setDetailJob(null)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-slate-800 hover:bg-slate-700 px-4 py-2 text-xs font-bold text-slate-200 transition"
+                >
+                  <ArrowLeft className="h-3.5 w-3.5 text-violet-400" />
+                  Back to Applications
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailJob(null)}
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-rose-500/30 bg-rose-500/10 hover:bg-rose-500/20 px-4 py-2 text-xs font-bold text-rose-300 transition"
+                >
+                  Close Modal ✕
+                </button>
+              </div>
             </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* MODAL 3: Email Connection & Sync Settings Modal */}
       <EmailSyncModal
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}
         connections={emailConnections}
-        onConnect={handleConnectProvider}
         onDisconnect={handleDisconnectProvider}
         onToggleAutoSync={handleToggleAutoSync}
         onSyncNow={() => triggerMailboxSync()}

@@ -2,13 +2,12 @@
 
 import React from 'react';
 import { Mail, RefreshCw, ShieldCheck, Zap, ArrowLeft } from 'lucide-react';
-import type { EmailConnection, EmailProvider } from '@/types/job-types';
+import type { EmailConnection } from '@/types/job-types';
 
 interface EmailSyncModalProps {
   isOpen: boolean;
   onClose: () => void;
   connections: EmailConnection[];
-  onConnect: (provider: EmailProvider, email: string) => void;
   onDisconnect: (id: string) => void;
   onToggleAutoSync: (id: string) => void;
   onSyncNow: () => void;
@@ -21,7 +20,6 @@ export function EmailSyncModal({
   isOpen,
   onClose,
   connections,
-  onConnect,
   onDisconnect,
   onToggleAutoSync,
   onSyncNow,
@@ -29,20 +27,14 @@ export function EmailSyncModal({
   isSyncing,
   defaultEmail = '',
 }: EmailSyncModalProps) {
-  const [customEmail, setCustomEmail] = React.useState(defaultEmail);
-  const [prevDefaultEmail, setPrevDefaultEmail] = React.useState(defaultEmail);
   const [pastedEmailText, setPastedEmailText] = React.useState('');
   const [activeTab, setActiveTab] = React.useState<'connect' | 'paste'>('connect');
-
-  if (defaultEmail !== prevDefaultEmail) {
-    setPrevDefaultEmail(defaultEmail);
-    setCustomEmail(defaultEmail);
-  }
 
   if (!isOpen) return null;
 
   const gmailConnection = connections.find((c) => c.provider === 'gmail');
   const outlookConnection = connections.find((c) => c.provider === 'outlook');
+  const hasConnection = connections.length > 0;
 
   const handlePasteSubmit = async () => {
     if (!pastedEmailText.trim() || !onParsePastedEmail) return;
@@ -83,7 +75,8 @@ export function EmailSyncModal({
           </div>
           <h2 className="text-2xl font-extrabold text-white">Connect Job Application Email</h2>
           <p className="text-xs text-slate-400 leading-relaxed">
-            Link your Gmail/Outlook account or paste application emails directly to detect status changes and interview invites.
+            Authorise your mailbox to detect status changes and interview invites, or paste a
+            recruiter email directly. We only ever read — we never send or modify mail.
           </p>
         </div>
 
@@ -91,17 +84,15 @@ export function EmailSyncModal({
         <div className="my-4 flex rounded-xl border border-white/10 bg-white/5 p-1">
           <button
             onClick={() => setActiveTab('connect')}
-            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
-              activeTab === 'connect' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${activeTab === 'connect' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+              }`}
           >
-            ⚡ Auto-Sync Account ({customEmail})
+            ⚡ Auto-Sync Mailbox
           </button>
           <button
             onClick={() => setActiveTab('paste')}
-            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${
-              activeTab === 'paste' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
-            }`}
+            className={`flex-1 rounded-lg py-2 text-xs font-bold transition ${activeTab === 'paste' ? 'bg-cyan-500 text-slate-950 shadow' : 'text-slate-400 hover:text-white'
+              }`}
           >
             📋 Paste Confirmation Email
           </button>
@@ -109,32 +100,21 @@ export function EmailSyncModal({
 
         {activeTab === 'connect' ? (
           <>
-            {/* Security & Privacy Assurance */}
+            {/* Security & Privacy Assurance — every claim below is enforced by the code */}
             <div className="my-4 rounded-2xl border border-emerald-500/20 bg-emerald-950/20 p-4 space-y-2">
               <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
-                <ShieldCheck className="h-4 w-4 text-emerald-400" /> Enterprise Privacy & Token Security
+                <ShieldCheck className="h-4 w-4 text-emerald-400" /> What we can and cannot do
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
                 • We <strong>never</strong> ask for or store your email password.<br />
-                • Only job-related emails (recruiters, status updates, interview invites) are processed.<br />
-                • Tokens are encrypted server-side and you can disconnect anytime.
-              </p>
-            </div>
-
-            {/* Custom Email Target Field */}
-            <div className="mb-4 space-y-1.5 rounded-2xl border border-white/10 bg-slate-950 p-4">
-              <label className="block text-xs font-bold text-slate-200">
-                Target Email Address to Connect & Sync
-              </label>
-              <input
-                type="email"
-                placeholder="your.email@gmail.com"
-                value={customEmail}
-                onChange={(e) => setCustomEmail(e.target.value)}
-                className="w-full rounded-xl border border-white/10 bg-white/5 px-3.5 py-2.5 text-xs text-white placeholder-slate-500 focus:border-cyan-500 focus:outline-none"
-              />
-              <p className="text-[11px] text-slate-400">
-                Pre-filled with your logged-in email. You can type any custom email address used for job applications.
+                • We request Google&rsquo;s <code className="text-emerald-300">gmail.readonly</code> scope,
+                so we can read mail but cannot send, delete or modify anything.<br />
+                • The access token is exchanged on our server and stored
+                <strong> encrypted at rest</strong>. It is never placed in your browser&rsquo;s
+                localStorage and never sent back to the client.<br />
+                • Only recent inbox mail matching the job-sync search is read, and each message is
+                parsed for a job application only.<br />
+                • Disconnect at any time — we delete the stored token and revoke the grant at Google.
               </p>
             </div>
 
@@ -142,9 +122,9 @@ export function EmailSyncModal({
             <div className="space-y-4">
               {/* Gmail */}
               <div className="rounded-2xl border border-white/10 bg-slate-950 p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-sm">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-bold text-sm">
                       M
                     </div>
                     <div>
@@ -153,100 +133,63 @@ export function EmailSyncModal({
                         {gmailConnection ? (
                           <span className="text-emerald-400">✓ Connected as {gmailConnection.email}</span>
                         ) : (
-                          'Sync Greenhouse, Lever & recruiter emails'
+                          'Read-only. Syncs Greenhouse, Lever & recruiter emails.'
                         )}
                       </div>
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    {gmailConnection ? (
-                      <>
-                        {customEmail.trim() && customEmail.trim().toLowerCase() !== gmailConnection.email.toLowerCase() && (
-                          <button
-                            onClick={() => {
-                              onDisconnect(gmailConnection.id);
-                              setTimeout(() => onConnect('gmail', customEmail), 100);
-                            }}
-                            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition"
-                          >
-                            Switch to {customEmail.trim().length > 20 ? customEmail.trim().slice(0, 18) + '…' : customEmail.trim()}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDisconnect(gmailConnection.id)}
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-300 hover:bg-red-500/20 transition"
-                        >
-                          Disconnect
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => onConnect('gmail', customEmail)}
-                        className="rounded-xl bg-white hover:bg-slate-200 px-4 py-2 text-xs font-bold text-slate-950 shadow-md transition"
-                      >
-                        Connect Gmail
-                      </button>
-                    )}
-                  </div>
+                  {gmailConnection ? (
+                    <button
+                      onClick={() => onDisconnect(gmailConnection.id)}
+                      className="shrink-0 rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-300 hover:bg-red-500/20 transition"
+                    >
+                      Disconnect
+                    </button>
+                  ) : (
+                    <a
+                      href="/api/email/gmail/connect"
+                      className="shrink-0 rounded-xl bg-white hover:bg-slate-200 px-4 py-2 text-xs font-bold text-slate-950 shadow-md transition"
+                    >
+                      Connect Gmail
+                    </a>
+                  )}
                 </div>
+                {!gmailConnection && (
+                  <p className="mt-3 text-[11px] text-slate-400">
+                    Google will ask which account to authorise. The connected address is whichever you
+                    pick there — we cannot connect an arbitrary address on your behalf.
+                  </p>
+                )}
               </div>
 
-              {/* Outlook */}
-              <div className="rounded-2xl border border-white/10 bg-slate-950 p-4">
-                <div className="flex items-center justify-between">
+              {/* Outlook — not implemented server-side, so it is disabled rather than faked */}
+              <div className="rounded-2xl border border-white/10 bg-slate-950 p-4 opacity-70">
+                <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-sm">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-sm">
                       O
                     </div>
                     <div>
                       <div className="font-bold text-xs text-white">Microsoft Outlook / Office 365</div>
                       <div className="text-[11px] text-slate-400">
-                        {outlookConnection ? (
-                          <span className="text-emerald-400">✓ Connected as {outlookConnection.email}</span>
-                        ) : (
-                          'Sync Outlook enterprise job threads'
-                        )}
+                        Not available yet — no Microsoft OAuth integration is implemented.
                       </div>
                     </div>
                   </div>
-
-                  <div className="flex items-center gap-2">
-                    {outlookConnection ? (
-                      <>
-                        {customEmail.trim() && customEmail.trim().toLowerCase() !== outlookConnection.email.toLowerCase() && (
-                          <button
-                            onClick={() => {
-                              onDisconnect(outlookConnection.id);
-                              setTimeout(() => onConnect('outlook', customEmail), 100);
-                            }}
-                            className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-1.5 text-xs font-bold text-amber-300 hover:bg-amber-500/20 transition"
-                          >
-                            Switch to {customEmail.trim().length > 20 ? customEmail.trim().slice(0, 18) + '…' : customEmail.trim()}
-                          </button>
-                        )}
-                        <button
-                          onClick={() => onDisconnect(outlookConnection.id)}
-                          className="rounded-xl border border-red-500/30 bg-red-500/10 px-3 py-1.5 text-xs font-bold text-red-300 hover:bg-red-500/20 transition"
-                        >
-                          Disconnect
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={() => onConnect('outlook', customEmail)}
-                        className="rounded-xl bg-blue-600 hover:bg-blue-500 px-4 py-2 text-xs font-bold text-white shadow-md transition"
-                      >
-                        Connect Outlook
-                      </button>
-                    )}
-                  </div>
+                  <button
+                    disabled
+                    title="Outlook sync is not implemented. Use the paste tab instead."
+                    className="shrink-0 rounded-xl border border-white/10 bg-slate-800 px-4 py-2 text-xs font-bold text-slate-500 cursor-not-allowed"
+                  >
+                    Coming soon
+                  </button>
                 </div>
               </div>
             </div>
 
             {/* Sync Controls & Auto-Sync Toggle */}
-            {connections.length > 0 && (
+            {hasConnection && connections[0] && (
               <div className="mt-5 pt-5 border-t border-white/10 space-y-4">
                 <div className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-2">
@@ -255,26 +198,27 @@ export function EmailSyncModal({
                   </div>
                   <button
                     onClick={() => onToggleAutoSync(connections[0].id)}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      connections[0].autoSync ? 'bg-violet-600' : 'bg-slate-800'
-                    }`}
+                    aria-pressed={connections[0].autoSync}
+                    aria-label="Toggle automatic background syncing"
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${connections[0].autoSync ? 'bg-violet-600' : 'bg-slate-800'
+                      }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        connections[0].autoSync ? 'translate-x-6' : 'translate-x-1'
-                      }`}
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${connections[0].autoSync ? 'translate-x-6' : 'translate-x-1'
+                        }`}
                     />
                   </button>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-[11px] text-slate-400">
-                    Last synced: {connections[0].lastSyncedAt ? new Date(connections[0].lastSyncedAt).toLocaleTimeString() : 'Just now'}
+                    Last synced: {connections[0].lastSyncedAt ? new Date(connections[0].lastSyncedAt).toLocaleTimeString() : 'never'}
+                    {outlookConnection ? ` · ${outlookConnection.email} (unsupported)` : ''}
                   </span>
                   <button
                     onClick={onSyncNow}
                     disabled={isSyncing}
-                    className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-600/30"
+                    className="inline-flex items-center gap-2 rounded-xl bg-violet-600 hover:bg-violet-500 disabled:opacity-50 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-violet-600/30"
                   >
                     <RefreshCw className={`h-3.5 w-3.5 ${isSyncing ? 'animate-spin' : ''}`} />
                     {isSyncing ? 'Syncing Mailbox...' : 'Sync Now'}
@@ -288,10 +232,12 @@ export function EmailSyncModal({
           <div className="space-y-4 my-4">
             <div className="rounded-2xl border border-cyan-500/20 bg-cyan-950/20 p-4 space-y-1.5">
               <div className="text-xs font-bold text-cyan-300">
-                Instant AI Email Parser for {customEmail}
+                Instant AI Email Parser{defaultEmail ? ` for ${defaultEmail}` : ''}
               </div>
               <p className="text-[11px] text-slate-300 leading-relaxed">
-                Paste any email body text received from Greenhouse, Lever, LinkedIn, or recruiters. Our AI will automatically extract the Company Name, Job Title, Stage, and Recruiter details!
+                Paste any email body text received from Greenhouse, Lever, LinkedIn, or recruiters. Our AI will
+                automatically extract the Company Name, Job Title, Stage, and Recruiter details! Nothing is sent
+                anywhere except our own parsing endpoint.
               </p>
             </div>
 
