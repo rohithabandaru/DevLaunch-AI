@@ -139,6 +139,17 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<'dark' | 'light' | null>(null);
   const activeTheme = theme ?? storedTheme;
 
+  // Persisting lives in the action, not in an effect. An effect that writes
+  // `activeTheme` on mount would clobber the saved value: during hydration
+  // useSyncExternalStore yields the SERVER snapshot ('dark'), so the saved
+  // 'light' would be overwritten with 'dark' before it was ever read.
+  const toggleTheme = useCallback(() => {
+    const next = activeTheme === 'dark' ? 'light' : 'dark';
+    setTheme(next);
+    writeStorage('theme', next);
+    window.dispatchEvent(new Event(STORAGE_EVENT));
+  }, [activeTheme]);
+
   const setSessionUser = useCallback((newUser: User | null) => {
     setSessionUserState(newUser);
     if (typeof window !== 'undefined') {
@@ -166,7 +177,6 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     document.documentElement.classList.toggle('light', activeTheme === 'light');
     document.documentElement.setAttribute('data-theme', activeTheme);
     document.documentElement.style.colorScheme = activeTheme;
-    writeStorage('theme', activeTheme);
   }, [activeTheme]);
 
   useEffect(() => {
@@ -327,7 +337,7 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
   const toggleAdminRole = useCallback(() => { }, []);
 
   const authValue = useMemo(() => ({ user, isAuthenticated: user !== null, signUp, signIn, signInWithGoogle, forgotPassword, verifySignupOtp, logout, updateProfile, deleteAccount, toggleAdminRole }), [user, signUp, signIn, signInWithGoogle, forgotPassword, verifySignupOtp, logout, updateProfile, deleteAccount, toggleAdminRole]);
-  const themeValue = useMemo(() => ({ theme: activeTheme, toggleTheme: () => setTheme(activeTheme === 'dark' ? 'light' : 'dark') }), [activeTheme]);
+  const themeValue = useMemo(() => ({ theme: activeTheme, toggleTheme }), [activeTheme, toggleTheme]);
   return <AuthContext.Provider value={authValue}><ThemeContext.Provider value={themeValue}>{children}</ThemeContext.Provider></AuthContext.Provider>;
 }
 
