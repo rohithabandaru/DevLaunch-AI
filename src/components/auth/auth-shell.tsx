@@ -18,34 +18,29 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { signIn, signUp, signInWithGoogle, forgotPassword, verifySignupOtp } = useAuth();
-  const [mode, setMode] = useState<AuthMode>(initialMode);
+
+  // The callback redirect reports its outcome through the URL. These are read
+  // once, as initial state, rather than in an effect: an effect that sets state
+  // from a prop cascades renders, and deriving it during render with a
+  // setState call loops forever whenever the notice is absent.
+  const initialNotice =
+    searchParams.get('verified') === 'true'
+      ? { text: 'Email verified successfully! You can now sign in.', mode: 'login' as AuthMode }
+      : searchParams.get('error') === 'verification_failed'
+        ? { text: 'Email verification failed. Please try signing up again.', mode: null }
+        : null;
+
+  const [mode, setMode] = useState<AuthMode>(initialNotice?.mode ?? initialMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState(initialNotice?.text ?? '');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-
-  // The callback redirect reports its outcome through the URL. Derive it during
-  // render instead of in an effect so the notice lands in the same paint.
-  const urlNotice =
-    searchParams.get('verified') === 'true'
-      ? { text: 'Email verified successfully! You can now sign in.', mode: 'login' as AuthMode }
-      : searchParams.get('error') === 'verification_failed'
-        ? { text: 'Email verification failed. Please try signing up again.', mode: null }
-        : null;
-  const [appliedNotice, setAppliedNotice] = useState<string | null>(urlNotice?.text ?? null);
-  if (urlNotice?.text !== appliedNotice) {
-    setAppliedNotice(urlNotice?.text ?? null);
-    if (urlNotice) {
-      setMessage(urlNotice.text);
-      if (urlNotice.mode) setMode(urlNotice.mode);
-    }
-  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
