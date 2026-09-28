@@ -194,14 +194,13 @@ export default function BillingPage() {
 
             <button
               onClick={() => handleOpenUpgrade('PRO')}
-              disabled={subscription.tier === 'PRO'}
-              className={`w-full rounded-2xl py-3 text-xs font-bold transition flex items-center justify-center gap-2 ${
+              className={`w-full rounded-2xl py-3 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                 subscription.tier === 'PRO'
-                  ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 cursor-default'
+                  ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/50'
                   : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/30'
               }`}
             >
-              {subscription.tier === 'PRO' ? 'Current Active Plan ✓' : 'Upgrade to Pro →'}
+              {subscription.tier === 'PRO' ? 'Current Active Plan (Manage) ✓' : 'Upgrade to Pro →'}
             </button>
           </div>
 
@@ -226,14 +225,13 @@ export default function BillingPage() {
 
             <button
               onClick={() => handleOpenUpgrade('ENTERPRISE')}
-              disabled={subscription.tier === 'ENTERPRISE'}
-              className={`w-full rounded-2xl py-3 text-xs font-bold transition flex items-center justify-center gap-2 ${
+              className={`w-full rounded-2xl py-3 text-xs font-bold transition flex items-center justify-center gap-2 cursor-pointer ${
                 subscription.tier === 'ENTERPRISE'
-                  ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 cursor-default'
+                  ? 'bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-600/50'
                   : 'bg-white/10 hover:bg-white/20 border border-white/10 text-white'
               }`}
             >
-              {subscription.tier === 'ENTERPRISE' ? 'Current Active Plan ✓' : 'Upgrade to Unlimited →'}
+              {subscription.tier === 'ENTERPRISE' ? 'Current Active Plan (Manage) ✓' : 'Upgrade to Unlimited →'}
             </button>
           </div>
         </div>

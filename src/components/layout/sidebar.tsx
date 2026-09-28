@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, Briefcase, BarChart3, Wand2, Layout, User, Settings, ShieldCheck, Sparkles, LogOut, Kanban, Sun, Moon, CreditCard } from 'lucide-react';
+import { LayoutDashboard, FileText, Briefcase, BarChart3, Wand2, Layout, User, Settings, ShieldCheck, Sparkles, LogOut, Kanban, Sun, Moon, CreditCard, Rocket } from 'lucide-react';
 import { useAuth, useTheme } from '@/components/providers/app-provider';
 import React from 'react';
 
@@ -32,12 +32,14 @@ export function Sidebar() {
   return (
     <aside className="flex h-screen w-64 flex-col border-r border-white/10 bg-slate-950/90 p-4 backdrop-blur-xl text-slate-100 selection:bg-violet-500/30">
       {/* App Branding Header */}
-      <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-3 py-2 text-lg font-bold tracking-tight">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-tr from-violet-600 to-cyan-500 text-white shadow-lg shadow-violet-500/30">
-          <Sparkles className="h-5 w-5" />
+      <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-3 py-2 text-lg font-bold tracking-tight group">
+        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#8B5CF6] to-[#EC4899] p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+          <div className="w-full h-full bg-[#0B1020] rounded-[10px] flex items-center justify-center">
+            <Rocket className="w-4.5 h-4.5 text-indigo-400 group-hover:text-white transition-colors" />
+          </div>
         </div>
-        <span className="bg-gradient-to-r from-white via-slate-200 to-slate-400 bg-clip-text text-transparent">
-          DevLaunch AI
+        <span className="font-bold text-lg tracking-tight text-white flex items-center gap-1.5">
+          DevLaunch <span className="gradient-text-indigo font-extrabold">AI</span>
         </span>
       </Link>
 

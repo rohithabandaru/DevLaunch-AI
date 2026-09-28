@@ -256,3 +256,50 @@
     box-sizing: border-box !important;
   }
 }
+
+/* ── Light Mode Theme Styles & Class Overrides ── */
+html.light, html[data-theme="light"] {
+  --bg-main: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --text-main: #0f172a;
+  --text-muted: #475569;
+  --border-subtle: rgba(0, 0, 0, 0.1);
+  color-scheme: light;
+}
+
+html.light body, html[data-theme="light"] body {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.light [class*="bg-slate-950"],
+html.light [class*="bg-slate-900"],
+html.light [class*="bg-[#0B1020]"],
+html.light [class*="bg-[#020617]"],
+html.light [class*="bg-[#1F2937]"] {
+  background-color: #ffffff !important;
+}
+
+html.light [class*="text-white"],
+html.light [class*="text-slate-100"],
+html.light [class*="text-slate-200"] {
+  color: #0f172a !important;
+}
+
+html.light [class*="text-slate-300"],
+html.light [class*="text-slate-400"] {
+  color: #475569 !important;
+}
+
+html.light [class*="border-white"] {
+  border-color: rgba(0, 0, 0, 0.12) !important;
+}
+
+html.light .glass-card {
+  background: rgba(255, 255, 255, 0.9) !important;
+  border: 1px solid rgba(0, 0, 0, 0.1) !important;
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.08) !important;
+}
+
+

@@ -62,7 +62,7 @@ export function Hero({ onOpenDemo }: HeroProps) {
               className="w-full sm:w-auto min-h-[48px] inline-flex items-center justify-center gap-2.5 px-6 sm:px-8 py-3.5 sm:py-4 rounded-xl text-sm sm:text-base font-bold text-white bg-blue-600 hover:bg-blue-500 shadow-xl shadow-blue-500/20 hover:-translate-y-0.5 transition-all duration-200"
             >
               <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 shrink-0 text-white" />
-              <span>Explore Job Openings</span>
+              <span suppressHydrationWarning>Explore Job Tracking</span>
             </a>
 
             <a

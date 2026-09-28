@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { MessageCircle, Mail, X, Phone } from 'lucide-react';
 
 const WHATSAPP_NUMBER = '917842570368';
@@ -10,6 +10,13 @@ const EMAIL_SUBJECT = encodeURIComponent('DevLaunch AI — Support Request');
 
 export function FloatingContact() {
   const [open, setOpen] = useState(false);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  if (!mounted) return null;
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] flex flex-col items-end gap-3">
@@ -77,7 +84,7 @@ export function FloatingContact() {
       >
         {/* Pulse ring when closed */}
         {!open && (
-          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 opacity-40 animate-ping" />
+          <span className="absolute inset-0 rounded-full bg-gradient-to-br from-violet-600 to-cyan-500 opacity-40 animate-ping pointer-events-none" />
         )}
         <span className="relative transition-transform duration-300" style={{ transform: open ? 'rotate(90deg)' : 'rotate(0deg)' }}>
           {open ? <X className="h-5 w-5" /> : <MessageCircle className="h-5 w-5" />}

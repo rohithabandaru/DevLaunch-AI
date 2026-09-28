@@ -5,7 +5,7 @@ import { Sparkles, Menu, X, Rocket, ArrowRight } from 'lucide-react';
 
 const navLinks: Array<{ href: string; label: string; isPrimary?: boolean }> = [
   { href: '#home', label: 'Home' },
-  { href: '/dashboard/jobs', label: 'Job Openings' },
+  { href: '/dashboard/jobs', label: 'Job Tracking' },
   { href: '#features', label: 'Features' },
   { href: '#pricing', label: 'Pricing' },
   { href: '#resume-builder', label: 'Resume Builder' },
@@ -60,7 +60,7 @@ export function Navbar() {
                 href={link.href}
                 className="text-sm font-medium whitespace-nowrap text-gray-300 transition-colors hover:text-white"
               >
-                <span>{link.label}</span>
+                <span suppressHydrationWarning>{link.label}</span>
               </a>
             ))}
             <a
@@ -99,6 +99,7 @@ export function Navbar() {
                 href={link.href}
                 onClick={closeMobileMenu}
                 className="text-base font-medium text-gray-300 hover:text-white px-3 py-3 min-h-[44px] rounded-lg hover:bg-gray-800/40 flex items-center touch-manipulation"
+                suppressHydrationWarning
               >
                 {link.label}
               </a>

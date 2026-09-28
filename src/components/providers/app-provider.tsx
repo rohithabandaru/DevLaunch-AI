@@ -2,7 +2,7 @@
 
 import { createBrowserClient } from '@supabase/ssr';
 import type { User as SupabaseUser } from '@supabase/supabase-js';
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { readStorage, writeStorage } from '@/lib/storage';
 
 export type User = {
@@ -28,6 +28,7 @@ interface AuthContextValue {
   signIn: (input: { email: string; password: string }) => Promise<string>;
   signInWithGoogle: () => Promise<string>;
   forgotPassword: (email: string) => Promise<string>;
+  verifySignupOtp: (email: string, otp: string) => Promise<string>;
   logout: () => void;
   updateProfile: (updates: Partial<User>) => void;
   deleteAccount: () => void;
@@ -46,6 +47,12 @@ const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 export const supabase = url && key ? createBrowserClient(url, key) : null;
 const missingConfig = 'Authentication is not configured. Set the Supabase public environment variables.';
 
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === 'string' && err) return err;
+  return fallback;
+}
+
 /**
  * The application role is authoritative ONLY when provided by the server. The
  * client never derives authorization from user_metadata.role.
@@ -59,6 +66,48 @@ async function fetchAuthoritativeRole(): Promise<'user' | 'admin'> {
   } catch {
     return 'user';
   }
+}
+
+const STORAGE_EVENT = 'devlaunch_storage_updated';
+
+function subscribeToStorage(onChange: () => void) {
+  window.addEventListener(STORAGE_EVENT, onChange);
+  // Cross-tab only: the browser fires 'storage' in sibling tabs, never the one
+  // that wrote. Same-tab writes go through setSessionUser's explicit dispatch.
+  window.addEventListener('storage', onChange);
+  return () => {
+    window.removeEventListener(STORAGE_EVENT, onChange);
+    window.removeEventListener('storage', onChange);
+  };
+}
+
+// localStorage is an external store, so the session is read through
+// useSyncExternalStore rather than copied into state by an effect. The cache
+// keeps getSnapshot referentially stable, which React requires.
+let cachedSession: User | null = null;
+let cachedSessionKey = 'init';
+
+function getStoredUser(): User | null {
+  const next = readStorage<User | null>('user_auth_session', null);
+  const key = JSON.stringify(next) ?? 'null';
+  if (key !== cachedSessionKey) {
+    cachedSession = next;
+    cachedSessionKey = key;
+  }
+  return cachedSession;
+}
+
+let cachedTheme: 'dark' | 'light' = 'dark';
+let cachedThemeKey = 'init';
+
+function getStoredTheme(): 'dark' | 'light' {
+  const next = readStorage<'dark' | 'light'>('theme', 'dark');
+  const key = String(next);
+  if (key !== cachedThemeKey) {
+    cachedTheme = next;
+    cachedThemeKey = key;
+  }
+  return cachedTheme;
 }
 
 function toUser(authUser: SupabaseUser, role: 'user' | 'admin'): User {
@@ -81,11 +130,17 @@ function toUser(authUser: SupabaseUser, role: 'user' | 'admin'): User {
 }
 
 export function AppProviders({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const storedUser = useSyncExternalStore(subscribeToStorage, getStoredUser, () => null);
+  const storedTheme = useSyncExternalStore(subscribeToStorage, getStoredTheme, () => 'dark' as const);
+  // A live Supabase session takes over once it resolves; until then the
+  // persisted session (if any) drives the UI.
+  const [sessionUser, setSessionUserState] = useState<User | null>(null);
+  const user = sessionUser ?? storedUser;
+  const [theme, setTheme] = useState<'dark' | 'light' | null>(null);
+  const activeTheme = theme ?? storedTheme;
 
   const setSessionUser = useCallback((newUser: User | null) => {
-    setUser(newUser);
+    setSessionUserState(newUser);
     if (typeof window !== 'undefined') {
       if (newUser) {
         writeStorage('user_auth_session', newUser);
@@ -94,26 +149,25 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         writeStorage('user_auth_session', null);
         document.cookie = 'devlaunch_demo_session=; path=/; max-age=0; expires=Thu, 01 Jan 1970 00:00:00 GMT';
       }
+      window.dispatchEvent(new Event(STORAGE_EVENT));
     }
   }, []);
 
   useEffect(() => {
-    const storedUser = readStorage<User | null>('user_auth_session', null);
-    if (storedUser) {
-      setUser(storedUser);
+    // src/proxy.ts reads this cookie to let a demo session through the
+    // /dashboard auth check. Refresh its 24h sliding window on every mount.
+    if (getStoredUser()) {
       document.cookie = 'devlaunch_demo_session=1; path=/; max-age=86400';
     }
-    const storedTheme = readStorage<'dark' | 'light'>('theme', 'dark');
-    if (storedTheme) {
-      setTheme(storedTheme);
-    }
   }, []);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
-    document.documentElement.style.colorScheme = theme;
-    writeStorage('theme', theme);
-  }, [theme]);
+    document.documentElement.classList.toggle('dark', activeTheme === 'dark');
+    document.documentElement.classList.toggle('light', activeTheme === 'light');
+    document.documentElement.setAttribute('data-theme', activeTheme);
+    document.documentElement.style.colorScheme = activeTheme;
+    writeStorage('theme', activeTheme);
+  }, [activeTheme]);
 
   useEffect(() => {
     if (!supabase) return;
@@ -138,61 +192,51 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
-          options: { data: { full_name: name }, emailRedirectTo: `${window.location.origin}/login` },
+          options: { data: { full_name: name }, emailRedirectTo: `${window.location.origin}/auth/callback?next=/login` },
         });
-        if (!error && data.user) {
-          setSessionUser(toUser(data.user, 'user'));
-          return 'Account created successfully.';
+        if (error) {
+          return error.message;
         }
-      } catch {
-        // Fallback to local user session
+        if (data.user) {
+          // If identities is empty, the email is already registered
+          if (!data.user.identities || data.user.identities.length === 0) {
+            return 'An account with this email already exists. Please sign in instead.';
+          }
+          if (data.session) {
+            setSessionUser(toUser(data.user, 'user'));
+            return 'Account created successfully.';
+          } else {
+            return 'Verification email sent. Please check your inbox for your 6-digit code.';
+          }
+        }
+        return 'Something went wrong. Please try again.';
+      } catch (err: unknown) {
+        return errorMessage(err, 'An error occurred during signup.');
       }
     }
-    setSessionUser({
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      name: name || 'DevLaunch User',
-      email: email || 'user@devlaunch.ai',
-      bio: 'DevLaunch AI Member',
-      photo: '',
-      role: 'user',
-      notifications: true,
-      website: '',
-      linkedin: '',
-      github: '',
-      createdAt: new Date().toISOString(),
-      plan: 'free',
-    });
-    return 'Account created successfully.';
+    return missingConfig;
   }, [setSessionUser]);
 
   const signIn = useCallback(async ({ email, password }: { email: string; password: string }) => {
     if (supabase) {
       try {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-        if (!error && data?.user) {
+        if (error) {
+          if (error.message.includes('Email not confirmed')) {
+            return 'Please verify your email address before signing in.';
+          }
+          return error.message;
+        }
+        if (data?.user) {
           const serverRole = await fetchAuthoritativeRole();
           setSessionUser(toUser(data.user, serverRole));
           return 'Signed in successfully.';
         }
-      } catch {
-        // Fallback to local user session
+      } catch (err: unknown) {
+        return errorMessage(err, 'An error occurred during sign in.');
       }
     }
-    setSessionUser({
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      name: email.split('@')[0] || 'DevLaunch User',
-      email: email || 'user@devlaunch.ai',
-      bio: 'DevLaunch AI Member',
-      photo: '',
-      role: 'user',
-      notifications: true,
-      website: '',
-      linkedin: '',
-      github: '',
-      createdAt: new Date().toISOString(),
-      plan: 'free',
-    });
-    return 'Signed in successfully.';
+    return missingConfig;
   }, [setSessionUser]);
 
   const signInWithGoogle = useCallback(async () => {
@@ -236,11 +280,36 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     return 'Password reset link sent. Check your inbox.';
   }, []);
 
-  const logout = useCallback(() => {
+  const verifySignupOtp = useCallback(async (email: string, otp: string) => {
     if (supabase) {
-      try { void supabase.auth.signOut(); } catch {}
+      try {
+        const { data, error } = await supabase.auth.verifyOtp({
+          email,
+          token: otp,
+          type: 'signup',
+        });
+        if (error) {
+          return error.message;
+        }
+        if (data?.user && data?.session) {
+          const serverRole = await fetchAuthoritativeRole();
+          setSessionUser(toUser(data.user, serverRole));
+          return 'Email verified successfully! Signing you in...';
+        }
+        return 'Verification failed. Please try again.';
+      } catch (err: unknown) {
+        return errorMessage(err, 'An error occurred during verification.');
+      }
+    }
+    return missingConfig;
+  }, [setSessionUser]);
+
+  const logout = useCallback(async () => {
+    if (supabase) {
+      try { await supabase.auth.signOut(); } catch {}
     }
     setSessionUser(null);
+    window.location.href = '/login';
   }, [setSessionUser]);
   const updateProfile = useCallback((updates: Partial<User>) => {
     if (!supabase || !user) return;
@@ -250,15 +319,15 @@ export function AppProviders({ children }: { children: React.ReactNode }) {
     void supabase.auth.updateUser({ data: metadata }).then(async ({ data }) => {
       if (data.user) {
         const serverRole = await fetchAuthoritativeRole();
-        setUser(toUser(data.user, serverRole));
+        setSessionUser(toUser(data.user, serverRole));
       }
     });
-  }, [user]);
+  }, [user, setSessionUser]);
   const deleteAccount = useCallback(() => logout(), [logout]);
   const toggleAdminRole = useCallback(() => { }, []);
 
-  const authValue = useMemo(() => ({ user, isAuthenticated: user !== null, signUp, signIn, signInWithGoogle, forgotPassword, logout, updateProfile, deleteAccount, toggleAdminRole }), [user, signUp, signIn, signInWithGoogle, forgotPassword, logout, updateProfile, deleteAccount, toggleAdminRole]);
-  const themeValue = useMemo(() => ({ theme, toggleTheme: () => setTheme((current) => current === 'dark' ? 'light' : 'dark') }), [theme]);
+  const authValue = useMemo(() => ({ user, isAuthenticated: user !== null, signUp, signIn, signInWithGoogle, forgotPassword, verifySignupOtp, logout, updateProfile, deleteAccount, toggleAdminRole }), [user, signUp, signIn, signInWithGoogle, forgotPassword, verifySignupOtp, logout, updateProfile, deleteAccount, toggleAdminRole]);
+  const themeValue = useMemo(() => ({ theme: activeTheme, toggleTheme: () => setTheme(activeTheme === 'dark' ? 'light' : 'dark') }), [activeTheme]);
   return <AuthContext.Provider value={authValue}><ThemeContext.Provider value={themeValue}>{children}</ThemeContext.Provider></AuthContext.Provider>;
 }
 

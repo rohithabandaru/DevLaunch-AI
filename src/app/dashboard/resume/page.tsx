@@ -127,6 +127,7 @@ export default function ResumeBuilderPage() {
       })
       .catch(err => console.error('Failed to load resume', err));
   }, [currentUser]);
+
   const [templateId, setTemplateId] = useState<string>(() => readStorage<string>('current_template', 'modern'));
   const [activeTab, setActiveTab] = useState<'editor' | 'templates' | 'ai'>('editor');
   const [sectionFilter, setSectionFilter] = useState<'personal' | 'summary' | 'experience' | 'education' | 'projects' | 'skills' | 'extras'>('personal');

@@ -100,9 +100,16 @@ const plans = [
 export function Pricing() {
   const router = useRouter();
   const [isAnnual, setIsAnnual] = useState(true);
-  const activeTier = useReactiveSubscription().tier;
+  const subscription = useReactiveSubscription();
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState(plans[1]); // Default to Pro
+
+  const activeTier = mounted ? subscription.tier : 'FREE';
 
   const handleOpenCheckout = (plan: typeof plans[0]) => {
     if (plan.tier === 'FREE') {

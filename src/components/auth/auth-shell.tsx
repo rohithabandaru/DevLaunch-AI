@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Sparkles, ArrowRight, CheckCircle2, ShieldCheck, Eye, EyeOff, Loader2, Mail, Lock, User } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { ArrowRight, Eye, EyeOff, Loader2, Mail, Lock, User, KeyRound, Rocket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/app-provider';
 
@@ -12,19 +12,40 @@ interface AuthShellProps {
   initialMode?: 'login' | 'signup' | 'forgot';
 }
 
+type AuthMode = 'login' | 'signup' | 'forgot' | 'verification';
+
 export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
   const router = useRouter();
-  const { signIn, signUp, signInWithGoogle, forgotPassword } = useAuth();
-  const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>(initialMode);
+  const searchParams = useSearchParams();
+  const { signIn, signUp, signInWithGoogle, forgotPassword, verifySignupOtp } = useAuth();
+  const [mode, setMode] = useState<AuthMode>(initialMode);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // The callback redirect reports its outcome through the URL. Derive it during
+  // render instead of in an effect so the notice lands in the same paint.
+  const urlNotice =
+    searchParams.get('verified') === 'true'
+      ? { text: 'Email verified successfully! You can now sign in.', mode: 'login' as AuthMode }
+      : searchParams.get('error') === 'verification_failed'
+        ? { text: 'Email verification failed. Please try signing up again.', mode: null }
+        : null;
+  const [appliedNotice, setAppliedNotice] = useState<string | null>(urlNotice?.text ?? null);
+  if (urlNotice?.text !== appliedNotice) {
+    setAppliedNotice(urlNotice?.text ?? null);
+    if (urlNotice) {
+      setMessage(urlNotice.text);
+      if (urlNotice.mode) setMode(urlNotice.mode);
+    }
+  }
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -37,6 +58,11 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
         // ── Name validation ──
         if (name.trim().length < 2) {
           setMessage('Please enter your full name (at least 2 characters).');
+          setLoading(false);
+          return;
+        }
+        if (/\d/.test(name)) {
+          setMessage('Name cannot contain numbers.');
           setLoading(false);
           return;
         }
@@ -76,8 +102,23 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
           setLoading(false);
           return;
         }
-        if (password.length < 6) {
-          setMessage('Password must be at least 6 characters.');
+        if (password.length < 8) {
+          setMessage('Password must be at least 8 characters long.');
+          setLoading(false);
+          return;
+        }
+        if (!/[A-Z]/.test(password) || !/[a-z]/.test(password)) {
+          setMessage('Password must contain both uppercase and lowercase letters.');
+          setLoading(false);
+          return;
+        }
+        if (!/\d/.test(password)) {
+          setMessage('Password must contain at least one number.');
+          setLoading(false);
+          return;
+        }
+        if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]+/.test(password)) {
+          setMessage('Password must contain at least one special symbol.');
           setLoading(false);
           return;
         }
@@ -102,15 +143,18 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
       }
 
       const resLower = (result || '').toLowerCase();
-      if (
-        resLower.includes('successfully') ||
-        resLower.includes('sent') ||
+      const isVerificationMessage = resLower.includes('verify') || resLower.includes('verification');
+      
+      if (isVerificationMessage && mode === 'signup') {
+        setMode('verification');
+      } else if (
+        !isVerificationMessage &&
+        (resLower.includes('successfully') ||
+        (resLower.includes('sent') && mode === 'forgot') ||
         resLower.includes('signed in') ||
-        resLower.includes('account created')
+        resLower.includes('account created'))
       ) {
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 400);
+        router.push('/dashboard');
       }
     } finally {
       setLoading(false);
@@ -129,9 +173,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
         resLower.includes('redirecting') ||
         resLower.includes('signed in')
       ) {
-        setTimeout(() => {
-          router.push('/dashboard');
-        }, 400);
+        router.push('/dashboard');
       }
     } finally {
       setGoogleLoading(false);
@@ -167,12 +209,14 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
       <div className="w-full max-w-md space-y-6">
         {/* ── Brand Logo & Header ── */}
         <div className="text-center space-y-2">
-          <Link href="/" className="inline-flex items-center gap-2.5 text-2xl font-bold tracking-tight group">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-tr from-violet-600 via-cyan-500 to-indigo-500 text-white shadow-xl shadow-violet-500/25 group-hover:scale-105 transition-transform">
-              <Sparkles className="h-6 w-6 text-white" />
+          <Link href="/" className="inline-flex items-center gap-2.5 group">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#8B5CF6] to-[#EC4899] p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+              <div className="w-full h-full bg-[#0B1020] rounded-[10px] flex items-center justify-center">
+                <Rocket className="w-5 h-5 text-indigo-400 group-hover:text-white transition-colors" />
+              </div>
             </div>
-            <span className="bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-2xl font-extrabold text-transparent">
-              DevLaunch AI
+            <span className="font-bold text-xl tracking-tight text-white flex items-center gap-1.5">
+              DevLaunch <span className="gradient-text-indigo font-extrabold">AI</span>
             </span>
           </Link>
           <p className="text-xs font-medium text-slate-400">
@@ -209,13 +253,15 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
           </div>
 
           {/* ── Heading ── */}
-          <div className="mb-6 space-y-1 text-center">
-            <h2 className="text-xl font-bold text-white">{headingText}</h2>
-            <p className="text-xs text-slate-400">{subText}</p>
-          </div>
+          {mode !== 'verification' && (
+            <div className="mb-6 space-y-1 text-center">
+              <h2 className="text-xl font-bold text-white">{headingText}</h2>
+              <p className="text-xs text-slate-400">{subText}</p>
+            </div>
+          )}
 
           {/* ── Google Sign-in ── */}
-          {mode !== 'forgot' && (
+          {mode !== 'forgot' && mode !== 'verification' && (
             <>
               <button
                 type="button"
@@ -260,7 +306,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
           )}
 
           {/* ── Email / Password form ── */}
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <form onSubmit={handleSubmit} className={mode === 'verification' ? 'hidden' : 'space-y-4'}>
             {/* Full Name — signup only */}
             {mode === 'signup' && (
               <div>
@@ -393,7 +439,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
             </Button>
 
             {/* Feedback message */}
-            {message && (
+            {message && mode !== 'verification' && (
               <div
                 className={`rounded-2xl border px-3.5 py-2.5 text-xs font-medium ${
                   message.includes('successfully') || message.includes('sent')
@@ -408,6 +454,83 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
 
           {/* ── Cross-page navigation ── */}
           <div className="mt-6 space-y-3">
+            {mode === 'verification' && (
+              <div className="text-center space-y-4">
+                <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-violet-500/10 border border-violet-500/20 mb-4">
+                  <KeyRound className="h-8 w-8 text-violet-400" />
+                </div>
+                <h3 className="text-xl font-bold text-white">Enter verification code</h3>
+                <p className="text-sm text-slate-400">
+                  We sent a verification code to <span className="text-white font-medium">{email}</span>
+                </p>
+                <form onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (otp.trim().length < 6) {
+                    setMessage('Please enter the full 6-digit code.');
+                    return;
+                  }
+                  setLoading(true);
+                  setMessage('');
+                  try {
+                    const result = await verifySignupOtp(email.toLowerCase().trim(), otp.trim());
+                    setMessage(result);
+                    if (result.toLowerCase().includes('successfully') || result.toLowerCase().includes('signing you in')) {
+                      router.push('/dashboard');
+                    }
+                  } finally {
+                    setLoading(false);
+                  }
+                }} className="space-y-4">
+                  <input
+                    required
+                    type="text"
+                    maxLength={6}
+                    className="w-full rounded-2xl border border-white/10 bg-slate-950/60 px-4 py-3 text-center tracking-[0.5em] text-lg font-bold text-white placeholder-slate-600 outline-none transition focus:border-violet-500 focus:ring-1 focus:ring-violet-500"
+                    placeholder="------"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.replace(/[^0-9]/g, ''))}
+                    autoFocus
+                  />
+                  <Button
+                    type="submit"
+                    className="w-full rounded-2xl bg-violet-600 hover:bg-violet-500 py-3 text-xs font-semibold text-white shadow-lg shadow-violet-600/30 transition disabled:opacity-50 cursor-pointer"
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="h-4 w-4 animate-spin" /> Verifying…
+                      </span>
+                    ) : (
+                      <span className="flex items-center justify-center gap-2">
+                        Verify & Continue <ArrowRight className="h-4 w-4" />
+                      </span>
+                    )}
+                  </Button>
+                  {message && (
+                    <div
+                      className={`rounded-2xl border px-3.5 py-2.5 text-xs font-medium ${
+                        message.includes('successfully') || message.includes('Signing')
+                          ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                          : 'border-red-500/30 bg-red-500/10 text-red-300'
+                      }`}
+                    >
+                      {message}
+                    </div>
+                  )}
+                </form>
+                <p className="text-xs text-slate-400 pt-2">
+                  Didn&apos;t get the code?{' '}
+                  <button
+                    type="button"
+                    onClick={() => { setMode('signup'); setOtp(''); setMessage(''); }}
+                    className="font-semibold text-violet-400 hover:text-violet-300 transition cursor-pointer"
+                  >
+                    Go back & resend
+                  </button>
+                </p>
+              </div>
+            )}
+            
             {mode === 'login' && (
               <p className="text-center text-xs text-slate-400">
                 Don&apos;t have an account?{' '}

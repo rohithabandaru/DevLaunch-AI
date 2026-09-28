@@ -62,7 +62,7 @@ const deserializeNotes = (dbNotes: string | null): Partial<JobApplication> => {
 };
 
 export const fetchJobs = async (userId: string): Promise<JobApplication[]> => {
-  if (!supabase) return [];
+  if (!supabase || !userId) return [];
   try {
     const { data, error } = await supabase.from('jobs').select('*').eq('user_id', userId);
     if (error) {
@@ -94,7 +94,7 @@ export const fetchJobs = async (userId: string): Promise<JobApplication[]> => {
 };
 
 export const insertJob = async (userId: string, job: JobApplication) => {
-  if (!supabase) return null;
+  if (!supabase || !userId) return null;
   try {
     const { data, error } = await supabase.from('jobs').insert({
       id: job.id.startsWith('job-') ? undefined : job.id, // Let DB generate UUID if it's a mock ID
