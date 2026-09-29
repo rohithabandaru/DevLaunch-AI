@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   ShieldAlert,
   Crown,
@@ -11,13 +11,14 @@ import {
   Lock,
   AlertTriangle,
 } from 'lucide-react';
+import { isSubscriptionExpired } from '@/lib/subscription-storage';
 import {
-  getActiveSubscription,
-  isSubscriptionExpired,
-  getRemainingDays,
-} from '@/lib/subscription-storage';
+  daysRemaining,
+  hasPaidEntitlement,
+  useServerSubscription,
+} from '@/lib/use-server-subscription';
 import { PaymentModal } from '@/components/pricing/payment-modal';
-import type { UserSubscription, SubscriptionTier } from '@/types/subscription-types';
+import type { SubscriptionTier } from '@/types/subscription-types';
 
 interface SubscriptionGateProps {
   children: React.ReactNode;
@@ -27,9 +28,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   // Free users are NOT limited by a wall-clock trial. They get a finite usage
   // allowance enforced by plan-limits (e.g. 3 AI generations, 5 tracked jobs).
   // Paid subscriptions still gate access until the paid period expires.
-  const [subscription, setSubscription] = useState<UserSubscription | null>(() => getActiveSubscription());
-  const [expired, setExpired] = useState(() => isSubscriptionExpired());
-  const [daysLeft, setDaysLeft] = useState(() => getRemainingDays());
+  //
+  // The tier comes from the SERVER (a verified payment), not localStorage.
+  // Local state is only the optimistic mirror, so clearing the browser no
+  // longer revokes access and editing localStorage no longer grants it.
+  const { subscription, isLoading, isUnverified } = useServerSubscription();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('PRO');
   const mounted = React.useSyncExternalStore(
@@ -38,21 +41,14 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     () => false
   );
 
-  // Listen for subscription updates (e.g. successful payment)
-  useEffect(() => {
-    const handleUpdate = () => {
-      const sub = getActiveSubscription();
-      setSubscription(sub);
-      setExpired(isSubscriptionExpired());
-      setDaysLeft(getRemainingDays());
-    };
-
-    window.addEventListener('devlaunch_subscription_updated', handleUpdate);
-    return () => window.removeEventListener('devlaunch_subscription_updated', handleUpdate);
-  }, []);
+  // Derived during render rather than mirrored into state, so there is no
+  // setState in an effect and no window where the gate disagrees with the
+  // subscription it was just handed.
+  const expired = isLoading ? isSubscriptionExpired() : !hasPaidEntitlement(subscription);
+  const daysLeft = isLoading ? 0 : daysRemaining(subscription);
 
   // Don't render anything until client-side hydration
-  if (!mounted || !subscription) return <>{children}</>;
+  if (!mounted) return <>{children}</>;
 
   // If subscription is still valid, just render children (possibly with a warning banner)
   if (!expired) {
@@ -109,6 +105,14 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   // ──────────────────────────────────
   return (
     <>
+      {isUnverified && (
+        <div className="mx-auto mb-4 max-w-5xl px-4">
+          <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-center text-[11px] text-amber-200">
+            Could not reach the billing service. Access is based on a cached copy until it
+            reconnects.
+          </p>
+        </div>
+      )}
       <div className="min-h-[80vh] flex items-center justify-center px-4 animate-in fade-in zoom-in-95 duration-500">
         <div className="w-full max-w-3xl space-y-8">
           {/* Header */}

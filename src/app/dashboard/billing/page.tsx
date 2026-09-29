@@ -11,17 +11,45 @@ import {
 } from 'lucide-react';
 import { cancelSubscription } from '@/lib/subscription-storage';
 import { useReactiveSubscription, useReactiveInvoices } from '@/lib/use-subscription-store';
+import { useServerSubscription } from '@/lib/use-server-subscription';
 import { PaymentModal } from '@/components/pricing/payment-modal';
 
 export default function BillingPage() {
-  const subscription = useReactiveSubscription();
+  // The server-verified subscription wins; the local store is the instant
+  // mirror so the page does not flash FREE on load.
+  const localSubscription = useReactiveSubscription();
+  const { subscription: serverSubscription, isLoading, refresh } = useServerSubscription();
+  const subscription = isLoading ? localSubscription : serverSubscription;
   const invoices = useReactiveInvoices();
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [selectedPlanForUpgrade, setSelectedPlanForUpgrade] = useState<'PRO' | 'ENTERPRISE'>('PRO');
+  const [cancelError, setCancelError] = useState('');
 
-  const handleCancel = () => {
-    if (confirm('Are you sure you want to cancel your subscription auto-renewal? You will retain access until the end of your current period.')) {
+  const handleCancel = async () => {
+    if (
+      !confirm(
+        'Are you sure you want to cancel your subscription auto-renewal? You will retain access until the end of your current period.'
+      )
+    ) {
+      return;
+    }
+
+    setCancelError('');
+    try {
+      const res = await fetch('/api/subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({ error: 'Could not cancel the subscription.' }));
+        setCancelError(data.error || 'Could not cancel the subscription.');
+        return;
+      }
+      // The cancellation is recorded server-side; re-read rather than assume.
       cancelSubscription();
+      await refresh();
+    } catch {
+      setCancelError('Could not reach the billing service. Please try again.');
     }
   };
 
@@ -114,6 +142,10 @@ export default function BillingPage() {
             >
               Cancel Auto-Renewal
             </button>
+          )}
+
+          {cancelError && (
+            <p className="text-center text-[11px] text-rose-300 pt-2">{cancelError}</p>
           )}
         </div>
 

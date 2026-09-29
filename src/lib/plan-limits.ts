@@ -1,5 +1,6 @@
 import { readStorage, writeStorage } from './storage';
-import { getActiveSubscription } from './subscription-storage';
+import { DEFAULT_FREE_SUBSCRIPTION } from './subscription-storage';
+import type { UserSubscription } from '@/types/subscription-types';
 
 /**
  * Free plan usage caps. Once a Free user exhausts a cap they cannot use that
@@ -31,10 +32,46 @@ const DEFAULT_USAGE: FeatureUsage = {
   portfoliosCreated: 0,
 };
 
+/**
+ * The subscription every usage check reads.
+ *
+ * These are non-React helpers called from click handlers, so the verified
+ * server value is published into this module by the store in
+ * `use-server-subscription.ts` rather than threaded through props.
+ *
+ * The default is FREE, not the localStorage mirror. Reading the mirror here
+ * would reintroduce the hole this migration exists to close: the browser owns
+ * that key, and `DEFAULT_FREE_SUBSCRIPTION.currentPeriodEnd` is year 2099, so a
+ * hand-edited `tier` would satisfy any expiry check. Failing closed costs a
+ * paying user one extra click on the rare render where the fetch has not
+ * landed yet, which is the correct direction for that trade.
+ */
+let serverSubscription: UserSubscription | null = null;
+
+/** Publishes the verified server subscription to the non-React helpers. */
+export function setAuthoritativeSubscription(subscription: UserSubscription | null): void {
+  serverSubscription = subscription;
+}
+
+/** Test-only: clears the published value so each case starts fail-closed. */
+export function resetAuthoritativeSubscriptionForTest(): void {
+  serverSubscription = null;
+}
+
+function effectiveSubscription(): UserSubscription {
+  return serverSubscription ?? DEFAULT_FREE_SUBSCRIPTION;
+}
+
+/** True when the subscription grants paid access right now. */
+export function isProEntitlement(subscription: UserSubscription): boolean {
+  if (subscription.tier !== 'PRO' && subscription.tier !== 'ENTERPRISE') return false;
+  const end = new Date(subscription.currentPeriodEnd).getTime();
+  return Number.isFinite(end) && end >= Date.now();
+}
+
 /** True when the signed-in user holds an active Pro or Unlimited subscription. */
 export function isProUser(): boolean {
-  const sub = getActiveSubscription();
-  return sub.tier === 'PRO' || sub.tier === 'ENTERPRISE';
+  return isProEntitlement(effectiveSubscription());
 }
 
 export function getFeatureUsage(): FeatureUsage {

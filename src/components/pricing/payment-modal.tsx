@@ -15,6 +15,7 @@ import {
   AlertCircle,
 } from 'lucide-react';
 import { activateSubscription } from '@/lib/subscription-storage';
+import { resolvePlan } from '@/lib/plans';
 import type { SubscriptionTier } from '@/types/subscription-types';
 
 interface PaymentModalProps {
@@ -99,11 +100,25 @@ export function PaymentModal({
 
   if (!isOpen) return null;
 
-  // Calculate Price
-  const monthlyPrice = currency === 'INR' ? initialMonthlyINR : initialMonthlyUSD;
-  const annualPrice = currency === 'INR' ? initialAnnualINR : initialAnnualUSD;
+  // Calculate Price.
+  // The authoritative amount is the server's, from the plan catalog. Display
+  // that same number rather than recomputing it here — the previous version
+  // multiplied the *annual* price by 12, so an annual plan displayed 12x what
+  // the customer is actually charged.
+  const monthlyCatalog = resolvePlan(tier, 'monthly');
+  const annualCatalog = resolvePlan(tier, 'annual');
+  const monthlyPrice = monthlyCatalog
+    ? monthlyCatalog.amountMinor / 100
+    : currency === 'INR'
+      ? initialMonthlyINR
+      : initialMonthlyUSD;
+  const annualPrice = annualCatalog
+    ? annualCatalog.amountMinor / 100
+    : currency === 'INR'
+      ? initialAnnualINR
+      : initialAnnualUSD;
   const unitPrice = billingCycle === 'annual' ? annualPrice : monthlyPrice;
-  const totalAmount = billingCycle === 'annual' ? unitPrice * 12 : unitPrice;
+  const totalAmount = unitPrice;
   const currencySymbol = currency === 'INR' ? '₹' : '$';
 
   const handleRazorpayCheckout = async () => {
@@ -126,15 +141,16 @@ export function PaymentModal({
     }
 
     try {
-      // Step 2: Create order on server
+      // Step 2: Create order on server.
+      // The body carries NO amount. The server prices the plan from its own
+      // catalog, so a tampered request cannot buy a top-tier plan for a rupee.
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          amount: totalAmount,
-          currency: currency,
-          planName: planName,
-          billingCycle: billingCycle,
+          tier,
+          billingCycle,
+          currency,
         }),
       });
 
@@ -142,7 +158,7 @@ export function PaymentModal({
 
       if (!orderRes.ok) {
         setIsProcessing(false);
-        setErrorMessage(`Order creation failed: ${orderData.error || 'Server error'}`);
+        setErrorMessage(orderData.error || 'Could not start the payment.');
         return;
       }
 
@@ -155,21 +171,62 @@ export function PaymentModal({
         description: `${planName} Plan Subscription (${billingCycle})`,
         image: '/favicon.ico',
         order_id: orderData.orderId,
-        handler: function (response: RazorpayResponse) {
-          const payId = response.razorpay_payment_id || `PAY-${Date.now()}`;
-          setTransactionId(payId);
+        handler: async function (response: RazorpayResponse) {
+          setIsProcessing(true);
 
-          activateSubscription(
-            tier,
-            billingCycle,
-            currency,
-            totalAmount,
-            'Razorpay'
-          );
+          // The browser reporting "paid" is not evidence of payment. Nothing
+          // is unlocked until the server has verified the Razorpay signature
+          // and confirmed the order belongs to this account.
+          if (
+            !response.razorpay_order_id ||
+            !response.razorpay_payment_id ||
+            !response.razorpay_signature
+          ) {
+            setIsProcessing(false);
+            setErrorMessage('The payment gateway returned an incomplete response. No access was granted.');
+            return;
+          }
 
-          setIsProcessing(false);
-          setIsSuccess(true);
-          if (onSuccess) onSuccess();
+          try {
+            const verifyRes = await fetch('/api/razorpay/verify-signature', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpayOrderId: response.razorpay_order_id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (!verifyRes.ok) {
+              setIsProcessing(false);
+              setErrorMessage(
+                verifyData.error || 'Payment verification failed. Contact support with your payment ID.'
+              );
+              return;
+            }
+
+            setTransactionId(response.razorpay_payment_id);
+
+            // Local mirror only, for instant UI. The server row written by
+            // verify-signature is what actually grants access.
+            activateSubscription(
+              tier,
+              billingCycle,
+              currency,
+              verifyData.amountPaid ?? totalAmount,
+              'Razorpay'
+            );
+
+            setIsProcessing(false);
+            setIsSuccess(true);
+            if (onSuccess) onSuccess();
+          } catch {
+            setIsProcessing(false);
+            setErrorMessage('Could not verify the payment. Please try again in a moment.');
+          }
         },
         modal: {
           ondismiss: function () {
@@ -323,7 +380,7 @@ export function PaymentModal({
                         SAVE 25%
                       </div>
                       <div className="text-sm font-bold text-white">Annually</div>
-                      <div className="mt-1 text-xs text-slate-400">{currencySymbol}{annualPrice}/mo</div>
+                      <div className="mt-1 text-xs text-slate-400">{currencySymbol}{annualPrice}/yr</div>
                     </button>
 
                     <button
