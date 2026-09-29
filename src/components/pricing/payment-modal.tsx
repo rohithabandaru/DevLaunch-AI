@@ -146,7 +146,7 @@ export function PaymentModal({
         body: JSON.stringify({
           tier,
           billingCycle,
-          currency,
+          currency: 'INR',
         }),
       });
 
