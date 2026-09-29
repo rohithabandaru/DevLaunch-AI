@@ -278,8 +278,8 @@ describe('POST /api/razorpay/verify-signature', () => {
     // match what was charged. Entitlement must still be refused.
     fetchedOrder = {
       ...fetchedOrder,
-      amount: 19900,
-      notes: { ...fetchedOrder.notes, plan_id: 'pro', billing_cycle: 'annual', amount_minor: '19900' },
+      amount: 238800,
+      notes: { ...fetchedOrder.notes, plan_id: 'pro', billing_cycle: 'annual', amount_minor: '238800' },
     };
     const { POST } = await import('@/app/api/razorpay/verify-signature/route');
     const res = await POST(
@@ -292,7 +292,7 @@ describe('POST /api/razorpay/verify-signature', () => {
 
     expect(res.status).toBe(200);
     expect(grantEntitlement).toHaveBeenCalledWith(
-      expect.objectContaining({ tier: 'PRO', billingCycle: 'annual', amountPaidMinor: 19900 })
+      expect.objectContaining({ tier: 'PRO', billingCycle: 'annual', amountPaidMinor: 238800 })
     );
   });
 });

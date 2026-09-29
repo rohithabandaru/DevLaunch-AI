@@ -107,16 +107,12 @@ export function PaymentModal({
   // the customer is actually charged.
   const monthlyCatalog = resolvePlan(tier, 'monthly');
   const annualCatalog = resolvePlan(tier, 'annual');
-  const monthlyPrice = monthlyCatalog
-    ? monthlyCatalog.amountMinor / 100
-    : currency === 'INR'
-      ? initialMonthlyINR
-      : initialMonthlyUSD;
-  const annualPrice = annualCatalog
-    ? annualCatalog.amountMinor / 100
-    : currency === 'INR'
-      ? initialAnnualINR
-      : initialAnnualUSD;
+  const monthlyPrice = currency === 'INR'
+    ? (monthlyCatalog ? monthlyCatalog.amountMinor / 100 : initialMonthlyINR)
+    : initialMonthlyUSD;
+  const annualPrice = currency === 'INR'
+    ? (annualCatalog ? annualCatalog.amountMinor / 100 : initialAnnualINR)
+    : (initialAnnualUSD * 12);
   const unitPrice = billingCycle === 'annual' ? annualPrice : monthlyPrice;
   const totalAmount = unitPrice;
   const currencySymbol = currency === 'INR' ? '₹' : '$';

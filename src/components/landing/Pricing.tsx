@@ -50,6 +50,7 @@ const plans = [
     annualPrice: 3,
     monthlyINR: 299,
     annualINR: 199,
+    annualTotalINR: 2388,
     badge: 'Most Popular • Student Special',
     accent: 'border-indigo-500/50',
     bg: 'bg-gradient-to-br from-indigo-950/60 via-[#1F2937]/80 to-purple-950/40',
@@ -78,6 +79,7 @@ const plans = [
     annualPrice: 7,
     monthlyINR: 699,
     annualINR: 499,
+    annualTotalINR: 5988,
     badge: 'Unlimited Power',
     accent: 'border-white/10',
     bg: 'bg-[#1F2937]/50',
@@ -177,7 +179,7 @@ export function Pricing() {
             </span>
             {isAnnual && (
               <span className="text-[10px] font-bold px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-in fade-in duration-200">
-                Best Value
+                Save ~33%
               </span>
             )}
           </div>
@@ -187,9 +189,17 @@ export function Pricing() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 lg:gap-8 items-start">
           {plans.map((plan) => {
             const PlanIcon = plan.icon;
-            const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            const priceINR = isAnnual ? plan.annualINR : plan.monthlyINR;
+            const priceUSD = isAnnual ? plan.annualPrice : plan.monthlyPrice;
             const isPro = plan.name === 'Pro';
             const isCurrentTier = activeTier === plan.tier;
+            const ctaText = isCurrentTier
+              ? 'Active Plan ✓'
+              : plan.tier === 'FREE'
+              ? plan.ctaText
+              : isAnnual && 'annualTotalINR' in plan
+              ? `Start ${plan.name} Plan (₹${(plan as { annualTotalINR: number }).annualTotalINR}/yr)`
+              : `Start ${plan.name} Plan (₹${plan.monthlyINR}/mo)`;
 
             return (
               <div
@@ -232,18 +242,25 @@ export function Pricing() {
                   </p>
 
                   {/* Price */}
-                  <div className="flex items-baseline gap-1.5 mb-8">
-                    <span className="text-4xl sm:text-5xl font-black text-white">
-                      ${price}
-                    </span>
-                    {price > 0 && (
-                      <span className="text-sm text-gray-400 font-medium">
-                        / month
+                  <div className="flex flex-col mb-8">
+                    <div className="flex items-baseline gap-1.5">
+                      <span className="text-4xl sm:text-5xl font-black text-white">
+                        {plan.tier === 'FREE' ? '₹0' : `₹${priceINR}`}
                       </span>
-                    )}
-                    {price === 0 && (
-                      <span className="text-sm text-gray-400 font-medium">
-                        forever
+                      {priceINR > 0 && (
+                        <span className="text-sm text-gray-400 font-medium">
+                          / month <span className="text-xs text-gray-500 font-normal">(~${priceUSD})</span>
+                        </span>
+                      )}
+                      {priceINR === 0 && (
+                        <span className="text-sm text-gray-400 font-medium">
+                          forever
+                        </span>
+                      )}
+                    </div>
+                    {isAnnual && 'annualTotalINR' in plan && (
+                      <span className="text-xs text-indigo-300 font-medium mt-1">
+                        Billed annually at ₹{(plan as { annualTotalINR: number }).annualTotalINR}/yr
                       </span>
                     )}
                   </div>
@@ -274,7 +291,7 @@ export function Pricing() {
                       : plan.ctaStyle
                     }`}
                 >
-                  <span>{isCurrentTier ? 'Active Plan ✓' : plan.ctaText}</span>
+                  <span>{ctaText}</span>
                   {!isCurrentTier && <ArrowRight className="w-4 h-4" />}
                 </button>
               </div>

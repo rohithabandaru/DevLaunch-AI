@@ -119,9 +119,9 @@ describe('razorpay webhook signature', () => {
 describe('plan catalog', () => {
   it('prices from the catalog, not the caller', () => {
     expect(resolvePlan('PRO', 'monthly')?.amountMinor).toBe(29900);
-    expect(resolvePlan('PRO', 'annual')?.amountMinor).toBe(19900);
+    expect(resolvePlan('PRO', 'annual')?.amountMinor).toBe(238800);
     expect(resolvePlan('ENTERPRISE', 'monthly')?.amountMinor).toBe(69900);
-    expect(resolvePlan('ENTERPRISE', 'annual')?.amountMinor).toBe(49900);
+    expect(resolvePlan('ENTERPRISE', 'annual')?.amountMinor).toBe(598800);
   });
 
   it('rejects unknown tiers and cycles', () => {
@@ -132,12 +132,9 @@ describe('plan catalog', () => {
     expect(resolvePlan({ toString: () => 'PRO' }, 'monthly')).toBeNull();
   });
 
-  it('never returns the annual price multiplied by twelve', () => {
-    // Regression: the modal used to display annualPrice * 12, so an annual
-    // plan showed 12x the amount actually charged.
+  it('returns the annual price for the full annual billing cycle', () => {
     const annual = resolvePlan('PRO', 'annual');
-    expect(annual?.amountMinor).toBe(19900);
-    expect(annual?.amountMinor).not.toBe(19900 * 12);
+    expect(annual?.amountMinor).toBe(238800);
   });
 
   it('validates tier and cycle predicates', () => {

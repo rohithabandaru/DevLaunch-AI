@@ -85,7 +85,7 @@ export default function BillingPage() {
                 onClick={() => handleOpenUpgrade('PRO')}
                 className="inline-flex items-center gap-2 rounded-2xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-6 py-3 text-xs font-bold text-white shadow-xl shadow-indigo-600/30 transition"
               >
-                <Sparkles className="h-4 w-4 text-amber-300" /> Upgrade to Pro ($12/mo)
+                <Sparkles className="h-4 w-4 text-amber-300" /> Upgrade to Pro (₹299/mo)
               </button>
             ) : (
               <div className="inline-flex items-center gap-2 rounded-2xl border border-emerald-500/30 bg-emerald-950/40 px-5 py-2.5 text-xs font-bold text-emerald-300">

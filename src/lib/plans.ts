@@ -29,14 +29,14 @@ export const PLANS: Record<Exclude<SubscriptionTier, 'FREE'>, PlanDefinition> = 
   PRO: {
     tier: 'PRO',
     name: 'Pro',
-    priceMinor: { monthly: 29900, annual: 19900 },
+    priceMinor: { monthly: 29900, annual: 238800 },
     currency: 'INR',
     periodDays: { monthly: 30, annual: 365 },
   },
   ENTERPRISE: {
     tier: 'ENTERPRISE',
     name: 'Unlimited',
-    priceMinor: { monthly: 69900, annual: 49900 },
+    priceMinor: { monthly: 69900, annual: 598800 },
     currency: 'INR',
     periodDays: { monthly: 30, annual: 365 },
   },
