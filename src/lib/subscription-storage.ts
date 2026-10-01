@@ -99,9 +99,9 @@ export function isProMember(): boolean {
 export function isSubscriptionExpired(): boolean {
   const sub = getActiveSubscription();
   
-  // Strict Paywall: If user is on FREE tier, they must pay to access the app.
+  // Free tier users get access subject to plan-limits (e.g. max jobs/resumes).
   if (sub.tier === 'FREE') {
-    return true; 
+    return false;
   }
 
   // If status is already canceled and period has ended

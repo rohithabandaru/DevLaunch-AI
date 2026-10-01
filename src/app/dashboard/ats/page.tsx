@@ -4,8 +4,11 @@ import React, { useState } from 'react';
 import { ShieldCheck, FileText, CheckCircle2, AlertTriangle, Wand2, BarChart2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { generateATSAnalysis } from '@/lib/ai';
+import { useAuth } from '@/components/providers/app-provider';
+import { saveUserATSReport } from '@/lib/user-content';
 
 export default function ATSCheckerPage() {
+  const { user } = useAuth();
   const [resumeText, setResumeText] = useState(
     `Alex Morgan\nSenior Full Stack Engineer\nEmail: alex.morgan@devlaunch.ai | Location: San Francisco, CA\nSummary: Architected real-time dynamic dashboard pipelines serving 500k+ daily API requests using Next.js App Router and PostgreSQL. Engineered responsive component library in Tailwind CSS & TypeScript.`
   );
@@ -35,8 +38,21 @@ export default function ATSCheckerPage() {
   const handleScan = () => {
     setIsScanning(true);
     setTimeout(() => {
-      setAnalysis(safeAnalyze(resumeText, jobDescription));
+      const res = safeAnalyze(resumeText, jobDescription);
+      setAnalysis(res);
       setIsScanning(false);
+      if (user?.id && res.overallScore > 0) {
+        void saveUserATSReport(user.id, {
+          resumeTitle: 'Full Stack Engineer Resume',
+          overallScore: res.overallScore,
+          keywordMatch: res.keywordMatch,
+          formatting: res.formatting,
+          skillsMatch: res.skillsMatch,
+          readability: res.readability,
+          suggestions: res.suggestions,
+          missingKeywords: res.missingKeywords,
+        });
+      }
     }, 500);
   };
 

@@ -1,17 +1,12 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import Image from 'next/image';
 import {
-  CreditCard,
-  QrCode,
   ShieldCheck,
-  Zap,
   Sparkles,
   ArrowLeft,
   CheckCircle2,
   Lock,
-  Clock,
   AlertCircle,
 } from 'lucide-react';
 import { activateSubscription } from '@/lib/subscription-storage';

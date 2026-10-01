@@ -7,7 +7,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <div className="print:hidden">
         <Sidebar />
       </div>
-      <main className="flex-1 overflow-y-auto p-6 lg:p-8 print:p-0 print:overflow-visible print:w-full">
+      <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8 pt-20 lg:pt-8 print:p-0 print:overflow-visible print:w-full min-w-0">
         <SubscriptionGate>
           {children}
         </SubscriptionGate>

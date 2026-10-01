@@ -175,13 +175,7 @@ export function AuthShell({ initialMode = 'login' }: AuthShellProps) {
     }
   };
 
-  /* ---------- Feature cards for the left column ---------- */
-  const features = [
-    { title: '35 Resume Templates', desc: 'ATS-friendly, Modern, Executive, Developer, Timeline & more.' },
-    { title: '15 Portfolio Themes', desc: 'Glassmorphic, Developer Dark, Neon, & Minimalist visual themes.' },
-    { title: 'ATS Scoring & Match', desc: 'Instant feedback with keyword gap analysis and formatting suggestions.' },
-    { title: 'AI Copywriter Engine', desc: 'Powered by OpenAI for summary, bullet points, and cover letters.' },
-  ];
+
 
   /* ---------- mode helpers ---------- */
   const headingText =

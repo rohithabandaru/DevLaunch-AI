@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { readStorage, writeStorage } from '@/lib/storage';
 import { generateSummary, generateBulletPoints, fixGrammarAndTone, generateATSAnalysis } from '@/lib/ai';
 import { ResumeData, ResumeRenderer, TEMPLATE_LIST } from '@/components/resume/resume-templates';
-import { fetchResume, saveResume } from '@/lib/supabase-documents';
+import { fetchUserResume as fetchResume, saveUserResume as saveResume, migrateLocalStorageToSupabase } from '@/lib/user-content';
 import { useAuth } from '@/components/providers/app-provider';
 import { isProUser, canUse, consume } from '@/lib/plan-limits';
 import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
@@ -121,6 +121,7 @@ export default function ResumeBuilderPage() {
 
   useEffect(() => {
     if (!currentUser?.id) return;
+    void migrateLocalStorageToSupabase(currentUser.id);
     fetchResume(currentUser.id)
       .then(data => {
         if (data) setResume(data);

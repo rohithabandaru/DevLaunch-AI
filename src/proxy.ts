@@ -19,38 +19,45 @@ export async function proxy(request: NextRequest) {
     supabaseUrl.includes('your-project-id') ||
     supabaseAnonKey.includes('your-anon-key');
 
-  const isDemoSession = request.cookies.get('devlaunch_demo_session')?.value === '1';
-
-  if (isDummySupabase || isDemoSession) {
-    return response;
-  }
-
-  const supabase = createServerClient(supabaseUrl, supabaseAnonKey, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
-      },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
-        response = NextResponse.next({
-          request,
-        });
-        cookiesToSet.forEach(({ name, value, options }) =>
-          response.cookies.set(name, value, options)
-        );
-      },
-    },
-  });
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const isProduction = process.env.NODE_ENV === 'production';
+  // Demo session cookie bypass is strictly forbidden in production.
+  const isDemoSessionAllowed = !isProduction && request.cookies.get('devlaunch_demo_session')?.value === '1';
 
   const url = request.nextUrl.clone();
   const pathname = url.pathname;
 
   // Protect all /dashboard routes
   if (pathname.startsWith('/dashboard')) {
+    if (isProduction && isDummySupabase) {
+      url.pathname = '/login';
+      return NextResponse.redirect(url);
+    }
+
+    if (!isProduction && (isDummySupabase || isDemoSessionAllowed)) {
+      return response;
+    }
+
+    const supabase = createServerClient(supabaseUrl!, supabaseAnonKey!, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({
+            request,
+          });
+          cookiesToSet.forEach(({ name, value, options }) =>
+            response.cookies.set(name, value, options)
+          );
+        },
+      },
+    });
+
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+
     if (!user) {
       url.pathname = '/login';
       url.searchParams.set('next', pathname);

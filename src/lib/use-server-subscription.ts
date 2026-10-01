@@ -140,8 +140,10 @@ function getSnapshot(): ServerSubscriptionSnapshot {
   return snapshot;
 }
 
+const SERVER_SNAPSHOT: ServerSubscriptionSnapshot = { subscription: DEFAULT_FREE_SUBSCRIPTION, isLoading: true, isUnverified: false };
+
 function getServerSnapshot(): ServerSubscriptionSnapshot {
-  return { subscription: DEFAULT_FREE_SUBSCRIPTION, isLoading: true, isUnverified: false };
+  return SERVER_SNAPSHOT;
 }
 
 export interface ServerSubscriptionState extends ServerSubscriptionSnapshot {

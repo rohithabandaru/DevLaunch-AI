@@ -41,10 +41,10 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     () => false
   );
 
-  // Derived during render rather than mirrored into state, so there is no
-  // setState in an effect and no window where the gate disagrees with the
-  // subscription it was just handed.
-  const expired = isLoading ? isSubscriptionExpired() : !hasPaidEntitlement(subscription);
+  const isFreeTier = subscription.tier === 'FREE';
+  const expired = isLoading
+    ? isSubscriptionExpired()
+    : (!isFreeTier && !hasPaidEntitlement(subscription));
   const daysLeft = isLoading ? 0 : daysRemaining(subscription);
 
   // Don't render anything until client-side hydration

@@ -2,9 +2,27 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { LayoutDashboard, FileText, Briefcase, BarChart3, Wand2, Layout, User, Settings, ShieldCheck, Sparkles, LogOut, Kanban, Sun, Moon, CreditCard, Rocket } from 'lucide-react';
+import {
+  LayoutDashboard,
+  FileText,
+  Briefcase,
+  BarChart3,
+  Wand2,
+  Layout,
+  User,
+  Settings,
+  ShieldCheck,
+  LogOut,
+  Kanban,
+  Sun,
+  Moon,
+  CreditCard,
+  Rocket,
+  Menu,
+  X,
+} from 'lucide-react';
 import { useAuth, useTheme } from '@/components/providers/app-provider';
-import React from 'react';
+import React, { useState } from 'react';
 
 const navItems = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -23,25 +41,37 @@ export function Sidebar() {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
+  const [mobileOpen, setMobileOpen] = useState(false);
   const mounted = React.useSyncExternalStore(
     () => () => {},
     () => true,
     () => false
   );
 
-  return (
-    <aside className="flex h-screen w-64 flex-col border-r border-white/10 bg-slate-950/90 p-4 backdrop-blur-xl text-slate-100 selection:bg-violet-500/30">
+  const closeMobile = () => setMobileOpen(false);
+
+  const NavContent = () => (
+    <div className="flex h-full flex-col p-4 text-slate-100 selection:bg-violet-500/30">
       {/* App Branding Header */}
-      <Link href="/dashboard" className="mb-6 flex items-center gap-2.5 px-3 py-2 text-lg font-bold tracking-tight group">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#8B5CF6] to-[#EC4899] p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
-          <div className="w-full h-full bg-[#0B1020] rounded-[10px] flex items-center justify-center">
-            <Rocket className="w-4.5 h-4.5 text-indigo-400 group-hover:text-white transition-colors" />
+      <div className="mb-6 flex items-center justify-between">
+        <Link href="/dashboard" onClick={closeMobile} className="flex items-center gap-2.5 px-2 py-1 text-lg font-bold tracking-tight group">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#8B5CF6] to-[#EC4899] p-0.5 shadow-lg shadow-indigo-500/25 group-hover:scale-105 transition-transform">
+            <div className="w-full h-full bg-[#0B1020] rounded-[10px] flex items-center justify-center">
+              <Rocket className="w-4.5 h-4.5 text-indigo-400 group-hover:text-white transition-colors" />
+            </div>
           </div>
-        </div>
-        <span className="font-bold text-lg tracking-tight text-white flex items-center gap-1.5">
-          DevLaunch <span className="gradient-text-indigo font-extrabold">AI</span>
-        </span>
-      </Link>
+          <span className="font-bold text-lg tracking-tight text-white flex items-center gap-1.5">
+            DevLaunch <span className="gradient-text-indigo font-extrabold">AI</span>
+          </span>
+        </Link>
+        <button
+          onClick={closeMobile}
+          className="lg:hidden p-2 rounded-xl text-slate-400 hover:bg-white/10 hover:text-white"
+          aria-label="Close menu"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
 
       {/* Navigation List */}
       <nav className="flex-1 space-y-1 overflow-y-auto pr-1">
@@ -52,6 +82,7 @@ export function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
+              onClick={closeMobile}
               className={`flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-xs font-semibold transition ${
                 isActive
                   ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
@@ -68,6 +99,7 @@ export function Sidebar() {
         {user?.role === 'admin' && (
           <Link
             href="/dashboard/admin"
+            onClick={closeMobile}
             className={`flex items-center gap-3 rounded-2xl px-3.5 py-2.5 text-xs font-semibold transition ${
               pathname === '/dashboard/admin'
                 ? 'bg-violet-600 text-white shadow-lg shadow-violet-600/30'
@@ -86,7 +118,7 @@ export function Sidebar() {
       {/* User Footer Profile & Actions */}
       <div className="border-t border-white/10 pt-4 space-y-3">
         <div className="flex items-center gap-3 px-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 font-bold text-violet-300 text-xs border border-violet-500/30">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-500/20 font-bold text-violet-300 text-xs border border-violet-500/30 shrink-0">
             {user?.name ? user.name.slice(0, 2).toUpperCase() : '…'}
           </div>
           <div className="flex-1 overflow-hidden">
@@ -119,13 +151,59 @@ export function Sidebar() {
           </div>
 
           <button
-            onClick={logout}
+            onClick={() => {
+              closeMobile();
+              logout();
+            }}
             className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-white/10 hover:text-red-300 transition"
           >
             <LogOut className="h-3.5 w-3.5" /> Logout
           </button>
         </div>
       </div>
-    </aside>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Top Mobile Bar for screens < lg */}
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 flex h-16 items-center justify-between border-b border-white/10 bg-slate-950/90 px-4 backdrop-blur-xl">
+        <Link href="/dashboard" className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#6366F1] via-[#8B5CF6] to-[#EC4899] p-0.5 shadow-md shadow-indigo-500/25">
+            <div className="w-full h-full bg-[#0B1020] rounded-[10px] flex items-center justify-center">
+              <Rocket className="w-4 h-4 text-indigo-400" />
+            </div>
+          </div>
+          <span className="font-bold text-base tracking-tight text-white flex items-center gap-1">
+            DevLaunch <span className="gradient-text-indigo font-extrabold">AI</span>
+          </span>
+        </Link>
+        <button
+          onClick={() => setMobileOpen(!mobileOpen)}
+          className="p-2 rounded-xl border border-white/10 bg-white/5 text-slate-200 hover:bg-white/10 focus:outline-none"
+          aria-label="Toggle Navigation"
+        >
+          {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+        </button>
+      </header>
+
+      {/* Desktop Sidebar (visible on lg screens and up) */}
+      <aside className="hidden lg:flex h-screen w-64 flex-col border-r border-white/10 bg-slate-950/90 backdrop-blur-xl shrink-0">
+        <NavContent />
+      </aside>
+
+      {/* Mobile Drawer Overlay */}
+      {mobileOpen && (
+        <div className="lg:hidden fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div className="fixed inset-0 bg-black/70 backdrop-blur-sm" onClick={closeMobile} />
+          {/* Drawer Sidebar */}
+          <div className="relative flex w-72 max-w-[80vw] flex-col bg-slate-950 border-r border-white/10 shadow-2xl z-10 animate-in slide-in-from-left duration-200">
+            <NavContent />
+          </div>
+        </div>
+      )}
+    </>
   );
 }
+

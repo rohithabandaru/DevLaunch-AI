@@ -7,6 +7,7 @@ import { generateCoverLetter } from '@/lib/ai';
 import { useAuth } from '@/components/providers/app-provider';
 import { isProUser, canUse, consume } from '@/lib/plan-limits';
 import { UpgradePrompt } from '@/components/subscription/upgrade-prompt';
+import { saveUserCoverLetter } from '@/lib/user-content';
 
 export default function CoverLetterPage() {
   const { user } = useAuth();
@@ -54,6 +55,16 @@ export default function CoverLetterPage() {
         .trim();
       const formatted = `${salutation} at ${company || 'the hiring team'},\n\n${body}\n\n${signOff},\n${candidateName}`;
       setContent(formatted);
+      if (user?.id) {
+        void saveUserCoverLetter(user.id, {
+          jobTitle,
+          company,
+          jobDescription,
+          tone,
+          length,
+          content: formatted,
+        });
+      }
       if (!isProUser()) consume('aiGenerations');
     } catch (err) {
       console.error('Cover letter generation failed:', err);
